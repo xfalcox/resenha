@@ -1,0 +1,9 @@
+{
+  "about_url": null,
+  "license_url": null,
+  "name": "resenha",
+  "component": true,
+  "assets": {
+    "p2pcf": "assets/p2pcf.js"
+  }
+}
