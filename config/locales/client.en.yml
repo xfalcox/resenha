@@ -1,0 +1,19 @@
+en:
+  js:
+    resenha:
+      sidebar:
+        title: "Voice rooms"
+        create: "Create room"
+        empty: "No voice rooms yet."
+      room:
+        join: "Join voice room"
+        leave: "Leave room"
+        connecting: "Connecting to peers…"
+        disconnected: "You left the room."
+        participants: "Listeners"
+        mic_on: "Mute microphone"
+        mic_off: "Unmute microphone"
+        connection_error: "We couldn't start a WebRTC session. Please ensure your browser has microphone permissions."
+      memberships:
+        add_user: "Add participant"
+        remove_user: "Remove participant"

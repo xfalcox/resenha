@@ -1,0 +1,12 @@
+plugins:
+  resenha_enabled:
+    default: false
+    client: true
+  resenha_allow_trust_level:
+    default: 2
+    min: 0
+    max: 4
+  resenha_max_rooms_per_user:
+    default: 5
+  resenha_participant_ttl_seconds:
+    default: 15

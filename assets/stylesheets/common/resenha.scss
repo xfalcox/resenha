@@ -1,0 +1,85 @@
+.resenha-participant-avatars {
+  display: block;
+  width: 100%;
+  margin-top: 0.35em;
+
+  &__entry {
+    display: flex;
+    align-items: center;
+    gap: 0.35em;
+    font-size: var(--font-down-1);
+    color: var(--primary-low-mid);
+
+    &--speaking {
+      .avatar {
+        border-color: var(--success);
+        box-shadow: 0 0 0 1px var(--success);
+      }
+
+      .resenha-participant-avatars__username {
+        color: var(--primary-high);
+        font-weight: 600;
+      }
+    }
+  }
+
+  .avatar {
+    flex-shrink: 0;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    border: 1px solid var(--primary-very-low);
+  }
+
+  &__username {
+    display: inline-block;
+    max-width: 14ch;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--primary-medium);
+  }
+}
+
+.resenha-room {
+  padding: 1.5em;
+
+  &__header {
+    margin-bottom: 1em;
+
+    h1 {
+      margin: 0;
+      font-size: var(--font-up-2);
+    }
+
+    p {
+      color: var(--primary-medium);
+    }
+  }
+
+  &__participants {
+    margin-bottom: 1em;
+
+    ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 0.25em;
+    }
+
+    li {
+      display: flex;
+      gap: 0.5em;
+      align-items: center;
+    }
+  }
+
+  &__controls {
+    margin-bottom: 1em;
+  }
+}
+
+.resenha-voice-canvas audio {
+  display: none;
+}

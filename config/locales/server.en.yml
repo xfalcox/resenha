@@ -1,0 +1,14 @@
+en:
+  site_settings:
+    resenha_enabled: "Enable the Resenha voice rooms plugin."
+    resenha_allow_trust_level: "Minimum trust level required to create and manage voice rooms."
+    resenha_max_rooms_per_user: "Maximum number of voice rooms a single user can own."
+    resenha_participant_ttl_seconds: "Seconds to keep active speaker presence in Redis before automatic cleanup."
+  resenha:
+    defaults:
+      watercooler_description: "Join for casual drop-in voice chats with other community members."
+    errors:
+      not_enabled: "Resenha voice rooms are disabled."
+      not_authorized: "You are not allowed to perform that action for this room."
+      room_limit: "You reached the maximum number of rooms you can create."
+      missing_payload: "Signal payload is required."
