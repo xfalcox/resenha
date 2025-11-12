@@ -1,4 +1,5 @@
 import { tracked } from "@glimmer/tracking";
+import { action } from "@ember/object";
 import Service, { service } from "@ember/service";
 import { ajax } from "discourse/lib/ajax";
 
@@ -78,6 +79,7 @@ export default class ResenhaWebrtcService extends Service {
     this.#teardownRoom(room.id);
   }
 
+  @action
   attachStream(stream, element) {
     if (!element || !stream) {
       return;
