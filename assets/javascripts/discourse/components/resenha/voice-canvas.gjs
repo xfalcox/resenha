@@ -21,13 +21,15 @@ export default class ResenhaVoiceCanvas extends Component {
           {{didInsert (fn this.resenhaWebrtc.attachStream this.localStream)}}
           autoplay
           muted
+          playsinline
         />
       {{/if}}
 
-      {{#each this.remoteStreams as |stream|}}
+      {{#each this.remoteStreams key="id" as |stream|}}
         <audio
           {{didInsert (fn this.resenhaWebrtc.attachStream stream)}}
           autoplay
+          playsinline
         />
       {{/each}}
     </section>

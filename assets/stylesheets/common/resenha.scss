@@ -80,6 +80,15 @@
   }
 }
 
-.resenha-voice-canvas audio {
-  display: none;
+.resenha-voice-canvas {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+
+  audio {
+    width: 0;
+    height: 0;
+    opacity: 0;
+  }
 }

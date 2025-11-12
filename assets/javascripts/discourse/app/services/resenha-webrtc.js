@@ -21,6 +21,7 @@ export default class ResenhaWebrtcService extends Service {
   #roomSubscriptions = new Map();
   #activeRoomIds = new Set();
   #speakingMonitors = new Map();
+  #pendingPlaybackElements = new WeakSet();
 
   willDestroy() {
     super.willDestroy(...arguments);
@@ -82,7 +83,34 @@ export default class ResenhaWebrtcService extends Service {
       return;
     }
 
+    if (element.srcObject === stream) {
+      return;
+    }
+
     element.srcObject = stream;
+    element.autoplay = true;
+    element.playsInline = true;
+
+    if (typeof element.play === "function") {
+      try {
+        const playPromise = element.play();
+        playPromise?.catch?.((error) => {
+          if (error?.name === "NotAllowedError") {
+            this.#schedulePlaybackResume(element);
+          } else {
+            // eslint-disable-next-line no-console
+            console.warn("[resenha] audio element failed to play", error);
+          }
+        });
+      } catch (error) {
+        if (error?.name === "NotAllowedError") {
+          this.#schedulePlaybackResume(element);
+        } else {
+          // eslint-disable-next-line no-console
+          console.warn("[resenha] audio element failed to play", error);
+        }
+      }
+    }
   }
 
   remotePeerKey(roomId, userId) {
@@ -376,5 +404,32 @@ export default class ResenhaWebrtcService extends Service {
 
   #bumpRemoteStreamsRevision() {
     this.remoteStreamsRevision++;
+  }
+
+  #schedulePlaybackResume(element) {
+    if (
+      !element ||
+      typeof document === "undefined" ||
+      this.#pendingPlaybackElements.has(element)
+    ) {
+      return;
+    }
+
+    this.#pendingPlaybackElements.add(element);
+
+    const resume = () => {
+      try {
+        element.play?.();
+      } catch {
+        // ignore subsequent failures
+      }
+
+      document.removeEventListener("pointerdown", resume);
+      document.removeEventListener("keydown", resume);
+      this.#pendingPlaybackElements.delete(element);
+    };
+
+    document.addEventListener("pointerdown", resume, { once: true });
+    document.addEventListener("keydown", resume, { once: true });
   }
 }
