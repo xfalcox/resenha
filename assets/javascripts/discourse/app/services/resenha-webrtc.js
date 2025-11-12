@@ -90,6 +90,10 @@ export default class ResenhaWebrtcService extends Service {
     element.srcObject = stream;
     element.autoplay = true;
     element.playsInline = true;
+    element.muted = stream === this.localStream;
+    if (element.muted) {
+      element.volume = 0;
+    }
 
     if (typeof element.play === "function") {
       try {
