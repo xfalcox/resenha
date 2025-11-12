@@ -1,7 +1,7 @@
 import Component from "@glimmer/component";
-import { service } from "@ember/service";
 import { fn } from "@ember/helper";
 import didInsert from "@ember/render-modifiers/modifiers/did-insert";
+import { service } from "@ember/service";
 
 export default class ResenhaVoiceCanvas extends Component {
   @service resenhaWebrtc;
@@ -11,7 +11,7 @@ export default class ResenhaVoiceCanvas extends Component {
   }
 
   get remoteStreams() {
-    return this.resenhaWebrtc.remoteStreamsFor(this.args.room?.id);
+    return this.resenhaWebrtc.remoteStreams;
   }
 
   <template>

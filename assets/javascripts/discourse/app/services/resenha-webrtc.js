@@ -14,6 +14,7 @@ export default class ResenhaWebrtcService extends Service {
 
   @tracked localStream;
   @tracked audioEnabled = true;
+  @tracked remoteStreamsRevision = 0;
 
   #peerConnections = new Map();
   #remoteStreams = new Map();
@@ -30,7 +31,15 @@ export default class ResenhaWebrtcService extends Service {
     this.#speakingMonitors.clear();
   }
 
+  get remoteStreams() {
+    this.remoteStreamsRevision;
+    return Array.from(this.#remoteStreams.values())
+      .filter(Array.isArray)
+      .flat();
+  }
+
   remoteStreamsFor(roomId) {
+    this.remoteStreamsRevision;
     return this.#remoteStreams.get(roomId) || [];
   }
 
@@ -102,6 +111,7 @@ export default class ResenhaWebrtcService extends Service {
     peers.forEach((pc) => pc.close());
     this.#peerConnections.delete(roomId);
     this.#remoteStreams.delete(roomId);
+    this.#bumpRemoteStreamsRevision();
     this.#teardownRoomMonitors(roomId);
   }
 
@@ -136,6 +146,7 @@ export default class ResenhaWebrtcService extends Service {
       if (!existing) {
         roomStreams.push(event.streams[0]);
         this.#remoteStreams.set(roomId, [...roomStreams]);
+        this.#bumpRemoteStreamsRevision();
         this.#ensureAudioMonitor(roomId, remoteUserId, event.streams[0]);
       }
     };
@@ -361,5 +372,9 @@ export default class ResenhaWebrtcService extends Service {
         this.#teardownAudioMonitor(roomId, Number(userId));
       }
     });
+  }
+
+  #bumpRemoteStreamsRevision() {
+    this.remoteStreamsRevision++;
   }
 }
