@@ -187,9 +187,19 @@ export default class ResenhaWebrtcService extends Service {
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
+        const candidatePayload =
+          typeof event.candidate.toJSON === "function"
+            ? event.candidate.toJSON()
+            : {
+                candidate: event.candidate.candidate,
+                sdpMid: event.candidate.sdpMid,
+                sdpMLineIndex: event.candidate.sdpMLineIndex,
+                usernameFragment: event.candidate.usernameFragment,
+              };
+
         this.#sendSignal(roomId, remoteUserId, {
           type: "candidate",
-          candidate: event.candidate,
+          candidate: candidatePayload,
         });
       }
     };
