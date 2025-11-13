@@ -1,8 +1,11 @@
+import { htmlSafe } from "@ember/template";
+import { avatarImg } from "discourse/lib/avatar-utils";
 import { withPluginApi } from "discourse/lib/plugin-api";
+import { escapeExpression } from "discourse/lib/utilities";
 import { i18n } from "discourse-i18n";
-import ResenhaParticipantAvatars from "discourse/plugins/resenha/discourse/components/resenha/participant-avatars";
 
 const LINK_NAME_PREFIX = "resenha-room-";
+const MAX_INLINE_AVATARS = 2;
 let sidebarClickHandler;
 
 export default {
@@ -54,7 +57,15 @@ export default {
           }
 
           get text() {
-            return this.room.name;
+            const participants = this.participantsForSummary;
+
+            if (!participants.length) {
+              return this.room.name;
+            }
+
+            const markup = this.participantsMarkup(participants);
+
+            return markup || this.room.name;
           }
 
           get prefixType() {
@@ -65,7 +76,7 @@ export default {
             return "microphone-lines";
           }
 
-          get contentComponentArgs() {
+          get participantsForSummary() {
             const participants = this.room.active_participants || [];
 
             if (!this.currentUser) {
@@ -98,8 +109,66 @@ export default {
             ];
           }
 
-          get contentComponent() {
-            return ResenhaParticipantAvatars;
+          displayName(participant) {
+            return participant?.name || participant?.username;
+          }
+
+          participantTooltip(participants) {
+            return participants
+              .map((participant) => this.displayName(participant))
+              .filter(Boolean)
+              .join(", ");
+          }
+
+          participantAvatar(participant) {
+            if (!participant?.avatar_template) {
+              return "";
+            }
+
+            const extraClasses = participant?.is_speaking
+              ? "resenha-sidebar-link__avatar resenha-sidebar-link__avatar--speaking"
+              : "resenha-sidebar-link__avatar";
+
+            return avatarImg({
+              avatarTemplate: participant.avatar_template,
+              size: "tiny",
+              extraClasses,
+              title: this.displayName(participant),
+              loading: "lazy",
+            });
+          }
+
+          participantsMarkup(participants) {
+            const inlineParticipants = participants.slice(
+              0,
+              MAX_INLINE_AVATARS
+            );
+            const avatarHtml = inlineParticipants
+              .map((participant) => this.participantAvatar(participant))
+              .join("");
+
+            if (!avatarHtml) {
+              return null;
+            }
+
+            const remaining = Math.max(
+              participants.length - inlineParticipants.length,
+              0
+            );
+            const remainderHtml = remaining
+              ? `<span class="resenha-sidebar-link__more">+${remaining}</span>`
+              : "";
+
+            const label = escapeExpression(
+              this.participantTooltip(participants) || this.room.name
+            );
+            const labelledAttrs = label
+              ? ` aria-label="${label}" title="${label}"`
+              : "";
+
+            return htmlSafe(
+              `<span class="resenha-sidebar-link__participants"${labelledAttrs}>${avatarHtml}${remainderHtml}</span>`
+            );
           }
         };
 

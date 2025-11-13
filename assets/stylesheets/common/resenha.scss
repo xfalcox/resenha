@@ -1,44 +1,29 @@
-.resenha-participant-avatars {
-  display: block;
-  width: 100%;
-  margin-top: 0.35em;
+.resenha-sidebar-link__participants {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+}
 
-  &__entry {
-    display: flex;
-    align-items: center;
-    gap: 0.35em;
-    font-size: var(--font-down-1);
-    color: var(--primary-low-mid);
+.resenha-sidebar-link__avatar {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  border: 1px solid var(--primary-very-low);
+  box-sizing: border-box;
 
-    &--speaking {
-      .avatar {
-        border-color: var(--success);
-        box-shadow: 0 0 0 1px var(--success);
-      }
-
-      .resenha-participant-avatars__username {
-        color: var(--primary-high);
-        font-weight: 600;
-      }
-    }
+  & + .resenha-sidebar-link__avatar {
+    margin-left: -0.35em;
   }
 
-  .avatar {
-    flex-shrink: 0;
-    width: 1.5rem;
-    height: 1.5rem;
-    border-radius: 50%;
-    border: 1px solid var(--primary-very-low);
+  &--speaking {
+    border-color: var(--success);
+    box-shadow: 0 0 0 1px var(--success);
   }
+}
 
-  &__username {
-    display: inline-block;
-    max-width: 14ch;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    color: var(--primary-medium);
-  }
+.resenha-sidebar-link__more {
+  font-size: var(--font-down-1);
+  color: var(--primary-medium);
 }
 
 .resenha-room {
