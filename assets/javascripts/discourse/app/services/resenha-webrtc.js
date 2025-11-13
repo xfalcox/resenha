@@ -18,6 +18,7 @@ export default class ResenhaWebrtcService extends Service {
   @tracked remoteStreamsRevision = 0;
 
   #peerConnections = new Map();
+  #offerRetryTimers = new Map();
   #remoteStreams = new Map();
   #roomSubscriptions = new Map();
   #activeRoomIds = new Set();
@@ -142,7 +143,10 @@ export default class ResenhaWebrtcService extends Service {
     }
 
     const peers = this.#peerConnections.get(roomId) || new Map();
-    peers.forEach((pc) => pc.close());
+    peers.forEach((pc, remoteUserId) => {
+      pc.close();
+      this.#clearOfferRetry(roomId, remoteUserId);
+    });
     this.#peerConnections.delete(roomId);
     this.#remoteStreams.delete(roomId);
     this.#bumpRemoteStreamsRevision();
@@ -204,6 +208,16 @@ export default class ResenhaWebrtcService extends Service {
       }
     };
 
+    pc.onconnectionstatechange = () => {
+      if (
+        ["connected", "failed", "closed", "disconnected"].includes(
+          pc.connectionState
+        )
+      ) {
+        this.#clearOfferRetry(roomId, remoteUserId);
+      }
+    };
+
     return pc;
   }
 
@@ -225,13 +239,16 @@ export default class ResenhaWebrtcService extends Service {
     const pc = await this.#createPeerConnection(roomId, remoteUserId);
 
     if (data.type === "offer") {
+      this.#clearOfferRetry(roomId, remoteUserId);
       await pc.setRemoteDescription(new RTCSessionDescription(data));
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       await this.#sendSignal(roomId, remoteUserId, answer);
     } else if (data.type === "answer") {
+      this.#clearOfferRetry(roomId, remoteUserId);
       await pc.setRemoteDescription(new RTCSessionDescription(data));
     } else if (data.type === "candidate") {
+      this.#clearOfferRetry(roomId, remoteUserId);
       await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
     }
   }
@@ -259,6 +276,7 @@ export default class ResenhaWebrtcService extends Service {
         pc.close();
         peers.delete(remoteUserId);
         this.#teardownAudioMonitor(roomId, remoteUserId);
+        this.#clearOfferRetry(roomId, remoteUserId);
       }
     });
 
@@ -267,20 +285,16 @@ export default class ResenhaWebrtcService extends Service {
         continue;
       }
 
-      if (peers?.has(participantId)) {
-        continue;
+      if (!peers?.has(participantId)) {
+        await this.#createPeerConnection(roomId, participantId);
+        peers = this.#peerConnections.get(roomId);
+
+        if (this.currentUser?.id <= participantId) {
+          await this.#initiateOffer(roomId, participantId);
+        } else {
+          this.#scheduleOfferRetry(roomId, participantId);
+        }
       }
-
-      if (this.currentUser?.id > participantId) {
-        continue;
-      }
-
-      const pc = await this.#createPeerConnection(roomId, participantId);
-      peers = this.#peerConnections.get(roomId);
-
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      await this.#sendSignal(roomId, participantId, offer);
     }
   }
 
@@ -312,6 +326,51 @@ export default class ResenhaWebrtcService extends Service {
     }
 
     this.resenhaRooms?.removeParticipant(roomId, this.currentUser.id);
+  }
+
+  async #initiateOffer(roomId, remoteUserId) {
+    const peers = this.#peerConnections.get(roomId);
+    const pc = peers?.get(remoteUserId);
+
+    if (!pc || pc.signalingState !== "stable") {
+      return;
+    }
+
+    try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await this.#sendSignal(roomId, remoteUserId, offer);
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.warn("[resenha] failed to create offer", error);
+    }
+  }
+
+  #scheduleOfferRetry(roomId, remoteUserId, delay = 2000) {
+    const key = this.remotePeerKey(roomId, remoteUserId);
+
+    if (this.#offerRetryTimers.has(key)) {
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      this.#offerRetryTimers.delete(key);
+      await this.#initiateOffer(roomId, remoteUserId);
+    }, delay);
+
+    this.#offerRetryTimers.set(key, timer);
+  }
+
+  #clearOfferRetry(roomId, remoteUserId) {
+    const key = this.remotePeerKey(roomId, remoteUserId);
+    const timer = this.#offerRetryTimers.get(key);
+
+    if (!timer) {
+      return;
+    }
+
+    clearTimeout(timer);
+    this.#offerRetryTimers.delete(key);
   }
 
   #ensureAudioMonitor(roomId, userId, stream) {
