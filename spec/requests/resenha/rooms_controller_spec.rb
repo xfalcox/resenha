@@ -70,16 +70,7 @@ RSpec.describe Resenha::RoomsController do
         usernameFragment: "abc123",
       }
 
-      expect(MessageBus).to receive(:publish).with(
-        Resenha.room_channel(room.id),
-        hash_including(
-          type: "signal",
-          room_id: room.id,
-          sender_id: user.id,
-          data: hash_including(type: "candidate", candidate: candidate_payload),
-        ),
-        user_ids: [staff.id],
-      )
+      allow(MessageBus).to receive(:publish)
 
       post "/resenha/rooms/#{room.id}/signal.json",
            params: {
@@ -91,6 +82,17 @@ RSpec.describe Resenha::RoomsController do
            }
 
       expect(response.status).to eq(204)
+
+      # Verify MessageBus received correct parameters
+      expect(MessageBus).to have_received(:publish) do |channel, data, opts|
+        expect(channel).to eq(Resenha.room_channel(room.id))
+        expect(data[:type]).to eq("signal")
+        expect(data[:room_id]).to eq(room.id)
+        expect(data[:sender_id]).to eq(user.id)
+        expect(data[:data][:type]).to eq("candidate")
+        expect(data[:data][:candidate][:candidate]).to eq(candidate_payload[:candidate])
+        expect(opts[:user_ids]).to eq([staff.id])
+      end
     end
   end
 end

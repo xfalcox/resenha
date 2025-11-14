@@ -112,7 +112,7 @@ module Resenha
         .new(@room)
         .publish!(
           from: current_user,
-          recipient_id: payload[:recipient_id],
+          recipient_id: payload[:recipient_id].to_i,
           data: payload.except(:recipient_id),
         )
 
