@@ -5,7 +5,7 @@ import { ajax } from "discourse/lib/ajax";
 
 const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
-  { urls: "stun:global.stun.twilio.com:3478?transport=udp" },
+  { urls: "stun:global.stun.twilio.com:3478" },
 ];
 
 export default class ResenhaWebrtcService extends Service {
