@@ -61,11 +61,23 @@ export default class ResenhaWebrtcService extends Service {
       });
     }
 
-    await ajax(`/resenha/rooms/${room.id}/join`, { type: "POST" });
+    // Subscribe to MessageBus BEFORE joining to avoid missing the participant broadcast
+    this.#subscribeToRoom(room.id);
     this.#activeRoomIds.add(room.id);
+
+    const response = await ajax(`/resenha/rooms/${room.id}/join`, {
+      type: "POST",
+    });
+
     this.#addLocalParticipant(room.id);
     this.#ensureAudioMonitor(room.id, this.currentUser?.id, this.localStream);
-    this.#subscribeToRoom(room.id);
+
+    // Process the initial participant list from the join response
+    if (response?.room?.active_participants) {
+      await this.#handleParticipants(room.id, {
+        participants: response.room.active_participants,
+      });
+    }
   }
 
   leave(room) {
