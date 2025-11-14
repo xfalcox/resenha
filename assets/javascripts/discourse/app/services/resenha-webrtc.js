@@ -55,10 +55,15 @@ export default class ResenhaWebrtcService extends Service {
       return;
     }
 
+    // eslint-disable-next-line no-console
+    console.log(`[resenha] joining room ${room.id}`);
+
     if (!this.localStream) {
       this.localStream = await navigator.mediaDevices.getUserMedia({
         audio: true,
       });
+      // eslint-disable-next-line no-console
+      console.log("[resenha] local stream obtained");
     }
 
     // Subscribe to MessageBus BEFORE joining to avoid missing the participant broadcast
@@ -68,6 +73,12 @@ export default class ResenhaWebrtcService extends Service {
     const response = await ajax(`/resenha/rooms/${room.id}/join`, {
       type: "POST",
     });
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `[resenha] join response, active_participants:`,
+      response?.room?.active_participants
+    );
 
     this.#addLocalParticipant(room.id);
     this.#ensureAudioMonitor(room.id, this.currentUser?.id, this.localStream);
@@ -138,10 +149,14 @@ export default class ResenhaWebrtcService extends Service {
 
   #subscribeToRoom(roomId) {
     if (this.#roomSubscriptions.has(roomId)) {
+      // eslint-disable-next-line no-console
+      console.log(`[resenha] already subscribed to room ${roomId}`);
       return;
     }
 
     const channel = `/resenha/rooms/${roomId}`;
+    // eslint-disable-next-line no-console
+    console.log(`[resenha] subscribing to MessageBus channel: ${channel}`);
     const callback = (payload) => this.#handleRoomMessage(roomId, payload);
     this.messageBus.subscribe(channel, callback);
     this.#roomSubscriptions.set(roomId, callback);
@@ -234,6 +249,11 @@ export default class ResenhaWebrtcService extends Service {
   }
 
   async #handleRoomMessage(roomId, payload) {
+    // eslint-disable-next-line no-console
+    console.log(
+      `[resenha] 📨 MessageBus message: room=${roomId}, type=${payload.type}, active=${this.#activeRoomIds.has(roomId)}`
+    );
+
     if (!this.#activeRoomIds.has(roomId)) {
       return;
     }
@@ -248,6 +268,10 @@ export default class ResenhaWebrtcService extends Service {
   async #handleSignal(roomId, payload) {
     const remoteUserId = Number(payload.sender_id);
     const data = payload.data;
+    // eslint-disable-next-line no-console
+    console.log(
+      `[resenha] 📥 received ${data.type} from user ${remoteUserId} in room ${roomId}`
+    );
     const pc = await this.#createPeerConnection(roomId, remoteUserId);
 
     if (data.type === "offer") {
@@ -266,6 +290,10 @@ export default class ResenhaWebrtcService extends Service {
   }
 
   async #sendSignal(roomId, recipientId, payload) {
+    // eslint-disable-next-line no-console
+    console.log(
+      `[resenha] 🚀 sending ${payload.type} to user ${recipientId} in room ${roomId}`
+    );
     await ajax(`/resenha/rooms/${roomId}/signal`, {
       type: "POST",
       data: {
@@ -280,6 +308,11 @@ export default class ResenhaWebrtcService extends Service {
   async #handleParticipants(roomId, payload) {
     const participantIds = new Set(
       (payload.participants || []).map((participant) => Number(participant.id))
+    );
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `[resenha] handleParticipants room=${roomId}, participants=[${Array.from(participantIds)}], currentUser=${this.currentUser?.id}`
     );
 
     let peers = this.#peerConnections.get(roomId);
@@ -298,12 +331,22 @@ export default class ResenhaWebrtcService extends Service {
       }
 
       if (!peers?.has(participantId)) {
+        // eslint-disable-next-line no-console
+        console.log(
+          `[resenha] creating peer connection to user ${participantId}`
+        );
         await this.#createPeerConnection(roomId, participantId);
         peers = this.#peerConnections.get(roomId);
 
         if (this.currentUser?.id <= participantId) {
+          // eslint-disable-next-line no-console
+          console.log(`[resenha] initiating offer to user ${participantId}`);
           await this.#initiateOffer(roomId, participantId);
         } else {
+          // eslint-disable-next-line no-console
+          console.log(
+            `[resenha] scheduling offer retry for user ${participantId}`
+          );
           this.#scheduleOfferRetry(roomId, participantId);
         }
       }
