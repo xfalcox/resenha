@@ -94,9 +94,15 @@ module Resenha
       payload =
         params
           .require(:payload)
-          .permit(:type, :sdp, :candidate, :recipient_id, :metadata)
+          .permit(
+            :type,
+            :sdp,
+            :recipient_id,
+            candidate: {},
+            metadata: {}
+          )
           .to_h
-          .symbolize_keys
+          .deep_symbolize_keys
 
       if payload.blank? || payload[:recipient_id].blank?
         raise Discourse::InvalidParameters.new(I18n.t("resenha.errors.missing_payload"))

@@ -59,5 +59,38 @@ RSpec.describe Resenha::RoomsController do
 
       expect(response.status).to eq(400)
     end
+
+    it "relays ICE candidate payloads" do
+      sign_in(user)
+
+      candidate_payload = {
+        candidate: "candidate:347230118 1 udp 41819902 203.0.113.1 54400 typ host",
+        sdpMid: "0",
+        sdpMLineIndex: 0,
+        usernameFragment: "abc123",
+      }
+
+      expect(MessageBus).to receive(:publish).with(
+        Resenha.room_channel(room.id),
+        hash_including(
+          type: "signal",
+          room_id: room.id,
+          sender_id: user.id,
+          data: hash_including(type: "candidate", candidate: candidate_payload),
+        ),
+        user_ids: [staff.id],
+      )
+
+      post "/resenha/rooms/#{room.id}/signal.json",
+           params: {
+             payload: {
+               type: "candidate",
+               candidate: candidate_payload,
+               recipient_id: staff.id,
+             },
+           }
+
+      expect(response.status).to eq(204)
+    end
   end
 end
