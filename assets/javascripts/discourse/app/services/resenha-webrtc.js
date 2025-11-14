@@ -461,6 +461,7 @@ export default class ResenhaWebrtcService extends Service {
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
       let rafId = null;
       let speaking = false;
+      let stopSpeakingTimer = null;
 
       const sample = () => {
         analyser.getByteTimeDomainData(dataArray);
@@ -472,9 +473,21 @@ export default class ResenhaWebrtcService extends Service {
         const rms = Math.sqrt(sum / dataArray.length);
         const isSpeaking = rms > 8;
 
-        if (isSpeaking !== speaking) {
-          speaking = isSpeaking;
-          this.resenhaRooms?.setParticipantSpeaking(roomId, userId, speaking);
+        if (isSpeaking && !speaking) {
+          // Start speaking immediately
+          if (stopSpeakingTimer) {
+            clearTimeout(stopSpeakingTimer);
+            stopSpeakingTimer = null;
+          }
+          speaking = true;
+          this.resenhaRooms?.setParticipantSpeaking(roomId, userId, true);
+        } else if (!isSpeaking && speaking && !stopSpeakingTimer) {
+          // Delay stopping to avoid flickering
+          stopSpeakingTimer = setTimeout(() => {
+            speaking = false;
+            stopSpeakingTimer = null;
+            this.resenhaRooms?.setParticipantSpeaking(roomId, userId, false);
+          }, 500);
         }
 
         rafId =
@@ -490,6 +503,11 @@ export default class ResenhaWebrtcService extends Service {
         stop() {
           if (rafId && typeof window !== "undefined") {
             window.cancelAnimationFrame(rafId);
+          }
+
+          if (stopSpeakingTimer) {
+            clearTimeout(stopSpeakingTimer);
+            stopSpeakingTimer = null;
           }
 
           try {
