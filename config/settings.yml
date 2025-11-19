@@ -9,4 +9,4 @@ plugins:
   resenha_max_rooms_per_user:
     default: 5
   resenha_participant_ttl_seconds:
-    default: 15
+    default: 30

@@ -27,7 +27,7 @@ Once the site setting flips on, the plugin seeds a default “Watercooler” roo
 | `resenha_enabled` | Master switch. When true we mount the engine, seed the default room, expose the API, and load the Ember sidebar section. |
 | `resenha_allow_trust_level` | Minimum trust level required to create/manage rooms. Defaults to TL2. |
 | `resenha_max_rooms_per_user` | Hard cap on how many rooms a single creator can own (default 5). |
-| `resenha_participant_ttl_seconds` | Number of seconds participant presence is kept in Redis before expiring (default 15). |
+| `resenha_participant_ttl_seconds` | Number of seconds participant presence is kept in Redis before expiring (default 30). A client-side heartbeat refreshes presence every 10 seconds. |
 
 All settings live under **Admin > Settings > Plugins**.
 

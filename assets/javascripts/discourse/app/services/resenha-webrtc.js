@@ -24,6 +24,7 @@ export default class ResenhaWebrtcService extends Service {
   #activeRoomIds = new Set();
   #speakingMonitors = new Map();
   #pendingPlaybackElements = new WeakSet();
+  #heartbeatTimers = new Map();
 
   willDestroy() {
     super.willDestroy(...arguments);
@@ -32,6 +33,8 @@ export default class ResenhaWebrtcService extends Service {
     });
     this.#speakingMonitors.forEach((monitor) => monitor?.stop?.());
     this.#speakingMonitors.clear();
+    this.#heartbeatTimers.forEach((timer) => clearInterval(timer));
+    this.#heartbeatTimers.clear();
   }
 
   get remoteStreams() {
@@ -82,6 +85,7 @@ export default class ResenhaWebrtcService extends Service {
 
     this.#addLocalParticipant(room.id);
     this.#ensureAudioMonitor(room.id, this.currentUser?.id, this.localStream);
+    this.#startHeartbeat(room.id);
 
     // Process the initial participant list from the join response
     if (response?.room?.active_participants) {
@@ -100,6 +104,7 @@ export default class ResenhaWebrtcService extends Service {
     this.#activeRoomIds.delete(room.id);
     this.#removeLocalParticipant(room.id);
     this.#teardownAudioMonitor(room.id, this.currentUser?.id);
+    this.#stopHeartbeat(room.id);
     this.#teardownRoom(room.id);
   }
 
@@ -579,5 +584,42 @@ export default class ResenhaWebrtcService extends Service {
 
     document.addEventListener("pointerdown", resume, { once: true });
     document.addEventListener("keydown", resume, { once: true });
+  }
+
+  #startHeartbeat(roomId) {
+    if (this.#heartbeatTimers.has(roomId)) {
+      return;
+    }
+
+    // Send heartbeat every 10 seconds (TTL is 15 seconds, so this gives us buffer)
+    const timer = setInterval(async () => {
+      if (!this.#activeRoomIds.has(roomId)) {
+        this.#stopHeartbeat(roomId);
+        return;
+      }
+
+      try {
+        await ajax(`/resenha/rooms/${roomId}/join`, {
+          type: "POST",
+        });
+        // eslint-disable-next-line no-console
+        console.log(`[resenha] heartbeat sent for room ${roomId}`);
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.warn(`[resenha] heartbeat failed for room ${roomId}`, error);
+      }
+    }, 10000);
+
+    this.#heartbeatTimers.set(roomId, timer);
+  }
+
+  #stopHeartbeat(roomId) {
+    const timer = this.#heartbeatTimers.get(roomId);
+    if (timer) {
+      clearInterval(timer);
+      this.#heartbeatTimers.delete(roomId);
+      // eslint-disable-next-line no-console
+      console.log(`[resenha] heartbeat stopped for room ${roomId}`);
+    }
   }
 }

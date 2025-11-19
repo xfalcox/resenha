@@ -3,7 +3,7 @@ en:
     resenha_enabled: "Enable the Resenha voice rooms plugin."
     resenha_allow_trust_level: "Minimum trust level required to create and manage voice rooms."
     resenha_max_rooms_per_user: "Maximum number of voice rooms a single user can own."
-    resenha_participant_ttl_seconds: "Seconds to keep active speaker presence in Redis before automatic cleanup."
+    resenha_participant_ttl_seconds: "Seconds to keep active speaker presence in Redis before automatic cleanup. Client heartbeat refreshes every 10 seconds."
   resenha:
     defaults:
       watercooler_description: "Join for casual drop-in voice chats with other community members."
