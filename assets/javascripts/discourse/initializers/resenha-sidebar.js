@@ -53,7 +53,19 @@ export default {
           }
 
           get title() {
-            return this.room.description || this.room.name;
+            const isConnected =
+              this.resenhaWebrtc.connectionStateFor(this.room.id) ===
+              "connected";
+
+            if (isConnected) {
+              return i18n("resenha.room.leave");
+            }
+
+            return (
+              this.room.description ||
+              this.room.name ||
+              i18n("resenha.room.join")
+            );
           }
 
           get text() {
