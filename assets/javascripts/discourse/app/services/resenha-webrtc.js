@@ -3,14 +3,10 @@ import { action } from "@ember/object";
 import Service, { service } from "@ember/service";
 import { ajax } from "discourse/lib/ajax";
 
-const ICE_SERVERS = [
-  { urls: "stun:stun.l.google.com:19302" },
-  { urls: "stun:global.stun.twilio.com:3478" },
-];
-
 export default class ResenhaWebrtcService extends Service {
   @service currentUser;
   @service messageBus;
+  @service siteSettings;
   @service("resenha-rooms") resenhaRooms;
 
   @tracked localStream;
@@ -35,6 +31,50 @@ export default class ResenhaWebrtcService extends Service {
     this.#speakingMonitors.clear();
     this.#heartbeatTimers.forEach((timer) => clearInterval(timer));
     this.#heartbeatTimers.clear();
+  }
+
+  /**
+   * Parse ICE servers from site settings (STUN and TURN)
+   * @returns {Array<{urls: string, username?: string, credential?: string}>} Array of ICE server configurations
+   */
+  get iceServers() {
+    const servers = [];
+
+    // Add STUN servers
+    const stunServers = this.siteSettings.resenha_stun_servers;
+    if (stunServers) {
+      stunServers
+        .split("|")
+        .map((url) => url.trim())
+        .filter(Boolean)
+        .forEach((url) => {
+          servers.push({ urls: url });
+        });
+    }
+
+    // Add TURN servers with credentials
+    const turnServers = this.siteSettings.resenha_turn_servers;
+    if (turnServers) {
+      const username = this.siteSettings.resenha_turn_username;
+      const credential = this.siteSettings.resenha_turn_credential;
+
+      turnServers
+        .split("|")
+        .map((url) => url.trim())
+        .filter(Boolean)
+        .forEach((url) => {
+          const server = { urls: url };
+          if (username) {
+            server.username = username;
+          }
+          if (credential) {
+            server.credential = credential;
+          }
+          servers.push(server);
+        });
+    }
+
+    return servers;
   }
 
   get remoteStreams() {
@@ -196,7 +236,7 @@ export default class ResenhaWebrtcService extends Service {
       return roomPeers.get(remoteUserId);
     }
 
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const pc = new RTCPeerConnection({ iceServers: this.iceServers });
     roomPeers.set(remoteUserId, pc);
 
     this.localStream?.getTracks().forEach((track) => {
