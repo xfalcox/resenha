@@ -13,22 +13,18 @@ register_svg_icon "phone"
 register_svg_icon "waveform"
 register_asset "stylesheets/common/resenha.scss"
 
-load File.expand_path("lib/resenha.rb", __dir__)
+require_relative "lib/resenha"
 
 after_initialize do
   require_relative "lib/resenha/user_extension"
 
-  Discourse::Application.routes.append do
-    mount ::Resenha::Engine, at: "/resenha"
-  end
+  Discourse::Application.routes.append { mount ::Resenha::Engine, at: "/resenha" }
 
   Guardian.prepend Resenha::GuardianExtension
 
-  if SiteSetting.resenha_enabled?
-    Resenha::DefaultRoomSeeder.ensure!
-  end
+  Resenha::DefaultRoomSeeder.ensure! if SiteSetting.resenha_enabled?
 
-  DiscourseEvent.on(:site_setting_changed) do |name, _old_value, new_value|
+  on(:site_setting_changed) do |name, _old_value, new_value|
     next if name.to_sym != :resenha_enabled
     next if !new_value
 

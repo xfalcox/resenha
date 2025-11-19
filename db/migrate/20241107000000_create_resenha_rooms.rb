@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+# rubocop:disable Discourse/NoAddReferenceOrAliasesActiveRecordMigration
 class CreateResenhaRooms < ActiveRecord::Migration[7.0]
   def change
     create_table :resenha_rooms do |t|
@@ -25,3 +26,4 @@ class CreateResenhaRooms < ActiveRecord::Migration[7.0]
               name: "idx_resenha_room_memberships_on_room_and_user"
   end
 end
+# rubocop:enable Discourse/NoAddReferenceOrAliasesActiveRecordMigration

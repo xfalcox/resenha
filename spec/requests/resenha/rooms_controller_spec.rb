@@ -1,14 +1,15 @@
+# frozen_string_literal: true
 require "rails_helper"
 require_relative "../../../db/migrate/20241107000000_create_resenha_rooms"
 
 RSpec.describe Resenha::RoomsController do
-  before(:all) do
+  before do
     ActiveRecord::Migration.suppress_messages do
       CreateResenhaRooms.new.change unless ActiveRecord::Base.connection.table_exists?(:resenha_rooms)
     end
   end
 
-  fab!(:staff) { Fabricate(:admin) }
+  fab!(:staff, :admin)
   fab!(:user) { Fabricate(:user, trust_level: TrustLevel[2]) }
   fab!(:room) { Fabricate(:resenha_room, creator: staff, public: true) }
 
