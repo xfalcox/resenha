@@ -5,7 +5,7 @@ import { escapeExpression } from "discourse/lib/utilities";
 import { i18n } from "discourse-i18n";
 
 const LINK_NAME_PREFIX = "resenha-room-";
-const MAX_INLINE_AVATARS = 2;
+const MAX_INLINE_AVATARS = 11;
 let sidebarClickHandler;
 
 export default {
@@ -43,6 +43,10 @@ export default {
               "connected"
             ) {
               classes.push("sidebar-section-link--active");
+            }
+
+            if (this.hasParticipants) {
+              classes.push("resenha-sidebar-link--has-participants");
             }
 
             return classes.join(" ");
@@ -86,6 +90,10 @@ export default {
 
           get prefixValue() {
             return "microphone-lines";
+          }
+
+          get hasParticipants() {
+            return this.participantsForSummary.length > 0;
           }
 
           get participantsForSummary() {

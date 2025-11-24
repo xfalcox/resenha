@@ -1,5 +1,6 @@
 .resenha-sidebar-link__participants {
-  display: inline-flex;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.25em;
 }
@@ -11,10 +12,6 @@
   border: 1px solid var(--primary-very-low);
   box-sizing: border-box;
 
-  & + .resenha-sidebar-link__avatar {
-    margin-left: -0.35em;
-  }
-
   &--speaking {
     border-color: var(--success);
     box-shadow: 0 0 0 1px var(--success);
@@ -24,6 +21,18 @@
 .resenha-sidebar-link__more {
   font-size: var(--font-down-1);
   color: var(--primary-medium);
+}
+
+.resenha-sidebar-link--has-participants {
+  height: auto;
+  padding-top: 0.5em;
+  padding-bottom: 0.5em;
+
+  .sidebar-section-link-content-text {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
 }
 
 .resenha-room {
