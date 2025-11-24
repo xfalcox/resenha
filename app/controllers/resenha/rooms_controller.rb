@@ -25,9 +25,7 @@ module Resenha
       guardian.ensure_can_create_resenha_room!
 
       if current_user.resenha_rooms.count >= SiteSetting.resenha_max_rooms_per_user
-        raise Discourse::InvalidParameters.new(
-                I18n.t("resenha.errors.room_limit"),
-              )
+        raise Discourse::InvalidParameters.new(I18n.t("resenha.errors.room_limit"))
       end
 
       room = Resenha::Room.new(room_params)
@@ -98,23 +96,49 @@ module Resenha
             :type,
             :sdp,
             :recipient_id,
-            candidate: {},
-            metadata: {}
+            candidate: {
+            },
+            metadata: {
+            },
+            events: [:type, :sdp, { candidate: {}, metadata: {} }],
+            messages: [
+              :recipient_id,
+              :type,
+              :sdp,
+              {
+                candidate: {
+                },
+                metadata: {
+                },
+                events: [:type, :sdp, { candidate: {}, metadata: {} }],
+              },
+            ],
           )
           .to_h
           .deep_symbolize_keys
 
-      if payload.blank? || payload[:recipient_id].blank?
+      if payload.blank?
         raise Discourse::InvalidParameters.new(I18n.t("resenha.errors.missing_payload"))
       end
 
-      Resenha::SignalRelay
-        .new(@room)
-        .publish!(
-          from: current_user,
-          recipient_id: payload[:recipient_id].to_i,
-          data: payload.except(:recipient_id),
-        )
+      relay = Resenha::SignalRelay.new(@room)
+      messages = extract_batched_messages(payload)
+      recipient_id = payload[:recipient_id].to_i
+
+      if recipient_id.positive?
+        events = extract_signal_events(payload)
+        messages << { recipient_id: recipient_id, events: events } if events.present?
+      end
+
+      if messages.blank?
+        raise Discourse::InvalidParameters.new(I18n.t("resenha.errors.missing_payload"))
+      end
+
+      messages.each do |message|
+        message[:events].each do |event|
+          relay.publish!(from: current_user, recipient_id: message[:recipient_id], data: event)
+        end
+      end
 
       head :no_content
     end
@@ -122,9 +146,66 @@ module Resenha
     private
 
     def room_params
-      params
-        .require(:room)
-        .permit(:name, :description, :public, :max_participants)
+      params.require(:room).permit(:name, :description, :public, :max_participants)
+    end
+
+    def extract_batched_messages(payload)
+      normalize_collection(payload[:messages]).filter_map do |raw_message|
+        message = normalize_signal_payload(raw_message)
+        next if message.blank?
+
+        recipient_id = message[:recipient_id].to_i
+        next unless recipient_id.positive?
+
+        events = extract_signal_events(message)
+        next if events.blank?
+
+        { recipient_id: recipient_id, events: events }
+      end
+    end
+
+    def extract_signal_events(container)
+      events =
+        normalize_collection(container[:events]).filter_map do |event|
+          normalized = normalize_signal_payload(event)
+          normalized.presence
+        end
+
+      return events if events.present?
+
+      fallback = container.except(:recipient_id, :events, :messages).presence
+      fallback ? [fallback] : []
+    end
+
+    def normalize_signal_payload(value)
+      return {} if value.blank?
+
+      if value.respond_to?(:to_h)
+        value.to_h.deep_symbolize_keys
+      else
+        value
+      end
+    rescue NoMethodError, TypeError
+      {}
+    end
+
+    def normalize_collection(raw)
+      return [] if raw.blank?
+
+      array =
+        if raw.is_a?(Array)
+          raw
+        elsif raw.respond_to?(:to_unsafe_h)
+          raw.to_unsafe_h
+        elsif raw.respond_to?(:to_h)
+          raw.to_h
+        else
+          Array.wrap(raw)
+        end
+
+      return array if array.is_a?(Array)
+
+      array.sort_by { |key, _| key.to_s }.map { |_, value| value }
     end
 
     def load_room

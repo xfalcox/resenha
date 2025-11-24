@@ -5,12 +5,15 @@ require_relative "../../../db/migrate/20241107000000_create_resenha_rooms"
 RSpec.describe Resenha::RoomsController do
   before do
     ActiveRecord::Migration.suppress_messages do
-      CreateResenhaRooms.new.change unless ActiveRecord::Base.connection.table_exists?(:resenha_rooms)
+      unless ActiveRecord::Base.connection.table_exists?(:resenha_rooms)
+        CreateResenhaRooms.new.change
+      end
     end
   end
 
   fab!(:staff, :admin)
   fab!(:user) { Fabricate(:user, trust_level: TrustLevel[2]) }
+  fab!(:other_participant) { Fabricate(:user, trust_level: TrustLevel[2]) }
   fab!(:room) { Fabricate(:resenha_room, creator: staff, public: true) }
 
   before do
@@ -71,7 +74,10 @@ RSpec.describe Resenha::RoomsController do
         usernameFragment: "abc123",
       }
 
-      allow(MessageBus).to receive(:publish)
+      published = []
+      allow(MessageBus).to receive(:publish) do |channel, data, opts|
+        published << [channel, data, opts]
+      end
 
       post "/resenha/rooms/#{room.id}/signal.json",
            params: {
@@ -94,6 +100,93 @@ RSpec.describe Resenha::RoomsController do
         expect(data[:data][:candidate][:candidate]).to eq(candidate_payload[:candidate])
         expect(opts[:user_ids]).to eq([staff.id])
       end
+    end
+
+    it "accepts batched events payloads" do
+      sign_in(user)
+
+      published = []
+      allow(MessageBus).to receive(:publish) do |channel, data, opts|
+        published << [channel, data, opts]
+      end
+
+      post "/resenha/rooms/#{room.id}/signal.json",
+           params: {
+             payload: {
+               recipient_id: staff.id,
+               events: [
+                 { type: "offer", sdp: "v=0" },
+                 {
+                   type: "candidate",
+                   candidate: {
+                     candidate: "candidate:1 1 udp 2122260223 10.0.0.1 8998 typ host",
+                   },
+                 },
+               ],
+             },
+           }
+
+      expect(response.status).to eq(204)
+      expect(MessageBus).to have_received(:publish).twice
+
+      expect(published.map(&:first)).to all(eq(Resenha.room_channel(room.id)))
+      expect(published.map { |(_, data)| data[:sender_id] }).to all(eq(user.id))
+      expect(published.map { |(_, _, opts)| opts[:user_ids] }).to all(eq([staff.id]))
+
+      types = published.map { |(_, data)| data[:data][:type] }
+      expect(types).to contain_exactly("offer", "candidate")
+      expect(published.find { |(_, data)| data[:data][:type] == "offer" }[1][:data][:sdp]).to eq(
+        "v=0",
+      )
+      expect(
+        published.find { |(_, data)| data[:data][:type] == "candidate" }[1][:data][:candidate][
+          :candidate
+        ],
+      ).to eq("candidate:1 1 udp 2122260223 10.0.0.1 8998 typ host")
+    end
+
+    it "relays multi-recipient batched messages" do
+      sign_in(user)
+
+      published = []
+      allow(MessageBus).to receive(:publish) do |channel, data, opts|
+        published << [channel, data, opts]
+      end
+
+      post "/resenha/rooms/#{room.id}/signal.json",
+           params: {
+             payload: {
+               messages: [
+                 { recipient_id: staff.id, events: [{ type: "offer", sdp: "v=0" }] },
+                 {
+                   recipient_id: other_participant.id,
+                   events: [
+                     {
+                       type: "candidate",
+                       candidate: {
+                         candidate: "candidate:1 1 udp 2122260223 10.0.0.1 8998 typ host",
+                       },
+                     },
+                   ],
+                 },
+               ],
+             },
+           }
+
+      expect(response.status).to eq(204)
+      expect(published.size).to eq(2)
+      expect(published.map(&:first)).to all(eq(Resenha.room_channel(room.id)))
+      expect(published.map { |(_, data)| data[:sender_id] }).to all(eq(user.id))
+
+      offer_payload = published.find { |(_, data)| data[:data][:type] == "offer" }
+      candidate_payload = published.find { |(_, data)| data[:data][:type] == "candidate" }
+
+      expect(offer_payload[1][:data][:sdp]).to eq("v=0")
+      expect(offer_payload[2][:user_ids]).to eq([staff.id])
+      expect(candidate_payload[1][:data][:candidate][:candidate]).to eq(
+        "candidate:1 1 udp 2122260223 10.0.0.1 8998 typ host",
+      )
+      expect(candidate_payload[2][:user_ids]).to eq([other_participant.id])
     end
   end
 end

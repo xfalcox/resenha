@@ -22,6 +22,14 @@ export default class ResenhaWebrtcService extends Service {
   #speakingMonitors = new Map();
   #pendingPlaybackElements = new WeakSet();
   #heartbeatTimers = new Map();
+  #signalQueues = new Map();
+  #signalFlushTimers = new Map();
+  #httpSignalQueues = new Map();
+  #httpSignalFlushTimers = new Map();
+
+  static #candidateBatchDelayMs = 75;
+  static #candidateBatchSize = 5;
+  static #httpBatchDelayMs = 25;
 
   willDestroy() {
     super.willDestroy(...arguments);
@@ -34,6 +42,15 @@ export default class ResenhaWebrtcService extends Service {
     this.#heartbeatTimers.clear();
     this.#peerReconnectTimers.forEach((timer) => clearTimeout(timer));
     this.#peerReconnectTimers.clear();
+    this.#signalFlushTimers.forEach((timer) => clearTimeout(timer));
+    this.#signalFlushTimers.clear();
+    this.#httpSignalFlushTimers.forEach((timer) => clearTimeout(timer));
+    this.#httpSignalFlushTimers.clear();
+    this.#httpSignalQueues.forEach((entry) => {
+      entry?.pending?.forEach((pending) => pending.resolve?.());
+    });
+    this.#httpSignalQueues.clear();
+    this.#signalQueues.clear();
   }
 
   /**
@@ -227,6 +244,8 @@ export default class ResenhaWebrtcService extends Service {
     this.#peerConnections.delete(roomId);
     this.#removeAllRemoteStreams(roomId);
     this.#teardownRoomMonitors(roomId);
+    this.#clearSignalQueuesForRoom(roomId);
+    this.#clearHttpSignalQueue(roomId);
   }
 
   async #createPeerConnection(roomId, remoteUserId) {
@@ -266,6 +285,14 @@ export default class ResenhaWebrtcService extends Service {
         this.#sendSignal(roomId, remoteUserId, {
           type: "candidate",
           candidate: candidatePayload,
+        }).catch((error) => {
+          // eslint-disable-next-line no-console
+          console.warn("[resenha] failed to send candidate", error);
+        });
+      } else {
+        this.#flushQueuedSignals(roomId, remoteUserId).catch((error) => {
+          // eslint-disable-next-line no-console
+          console.warn("[resenha] failed to flush signal queue", error);
         });
       }
     };
@@ -337,7 +364,10 @@ export default class ResenhaWebrtcService extends Service {
       await pc.setRemoteDescription(new RTCSessionDescription(data));
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      await this.#sendSignal(roomId, remoteUserId, answer);
+      this.#sendSignal(roomId, remoteUserId, answer).catch((error) => {
+        // eslint-disable-next-line no-console
+        console.warn("[resenha] failed to send answer", error);
+      });
     } else if (data.type === "answer") {
       this.#clearOfferRetry(roomId, remoteUserId);
       await pc.setRemoteDescription(new RTCSessionDescription(data));
@@ -348,19 +378,74 @@ export default class ResenhaWebrtcService extends Service {
   }
 
   async #sendSignal(roomId, recipientId, payload) {
-    // eslint-disable-next-line no-console
-    console.log(
-      `[resenha] 🚀 sending ${payload.type} to user ${recipientId} in room ${roomId}`
-    );
-    await ajax(`/resenha/rooms/${roomId}/signal`, {
-      type: "POST",
-      data: {
-        payload: {
-          ...payload,
-          recipient_id: recipientId,
-        },
-      },
-    });
+    if (!roomId || !recipientId || !payload) {
+      return Promise.resolve();
+    }
+
+    if (payload.type === "candidate") {
+      this.#queueSignal(roomId, recipientId, payload);
+      return Promise.resolve();
+    }
+
+    await this.#flushQueuedSignals(roomId, recipientId);
+    await this.#postSignals(roomId, recipientId, [payload]);
+  }
+
+  #queueSignal(roomId, recipientId, payload) {
+    const key = this.remotePeerKey(roomId, recipientId);
+    const queue = this.#signalQueues.get(key) || [];
+    queue.push(payload);
+    this.#signalQueues.set(key, queue);
+
+    if (queue.length >= ResenhaWebrtcService.#candidateBatchSize) {
+      this.#flushQueuedSignals(roomId, recipientId).catch((error) => {
+        // eslint-disable-next-line no-console
+        console.warn("[resenha] failed to flush signal queue", error);
+      });
+      return;
+    }
+
+    const existingTimer = this.#signalFlushTimers.get(key);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    const timer = setTimeout(() => {
+      this.#signalFlushTimers.delete(key);
+      this.#flushQueuedSignals(roomId, recipientId).catch((error) => {
+        // eslint-disable-next-line no-console
+        console.warn("[resenha] failed to flush signal queue", error);
+      });
+    }, ResenhaWebrtcService.#candidateBatchDelayMs);
+
+    this.#signalFlushTimers.set(key, timer);
+  }
+
+  async #flushQueuedSignals(roomId, recipientId) {
+    const key = this.remotePeerKey(roomId, recipientId);
+    const queue = this.#signalQueues.get(key);
+
+    if (!queue?.length) {
+      return;
+    }
+
+    this.#signalQueues.delete(key);
+
+    const timer = this.#signalFlushTimers.get(key);
+    if (timer) {
+      clearTimeout(timer);
+      this.#signalFlushTimers.delete(key);
+    }
+
+    await this.#postSignals(roomId, recipientId, queue);
+  }
+
+  async #postSignals(roomId, recipientId, events) {
+    if (!events?.length || !this.#activeRoomIds.has(roomId)) {
+      return;
+    }
+
+    await this.#enqueueHttpSignals(roomId, recipientId, events);
   }
 
   async #handleParticipants(roomId, payload) {
@@ -453,7 +538,10 @@ export default class ResenhaWebrtcService extends Service {
     try {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      await this.#sendSignal(roomId, remoteUserId, offer);
+      this.#sendSignal(roomId, remoteUserId, offer).catch((error) => {
+        // eslint-disable-next-line no-console
+        console.warn("[resenha] failed to send offer", error);
+      });
     } catch (error) {
       // eslint-disable-next-line no-console
       console.warn("[resenha] failed to create offer", error);
@@ -635,10 +723,7 @@ export default class ResenhaWebrtcService extends Service {
       (entry) => Number(entry?.userId) === Number(remoteUserId)
     );
 
-    if (
-      existingIndex >= 0 &&
-      roomStreams[existingIndex]?.stream === stream
-    ) {
+    if (existingIndex >= 0 && roomStreams[existingIndex]?.stream === stream) {
       return;
     }
 
@@ -782,6 +867,177 @@ export default class ResenhaWebrtcService extends Service {
 
     clearTimeout(timer);
     this.#peerReconnectTimers.delete(key);
+  }
+
+  #clearSignalQueuesForRoom(roomId) {
+    const prefix = `${roomId}:`;
+
+    Array.from(this.#signalQueues.keys()).forEach((key) => {
+      if (!key.startsWith(prefix)) {
+        return;
+      }
+
+      const timer = this.#signalFlushTimers.get(key);
+
+      if (timer) {
+        clearTimeout(timer);
+        this.#signalFlushTimers.delete(key);
+      }
+
+      this.#signalQueues.delete(key);
+    });
+  }
+
+  #clearHttpSignalQueue(roomId) {
+    const timer = this.#httpSignalFlushTimers.get(roomId);
+    if (timer) {
+      clearTimeout(timer);
+      this.#httpSignalFlushTimers.delete(roomId);
+    }
+
+    const entry = this.#httpSignalQueues.get(roomId);
+    if (!entry) {
+      return;
+    }
+
+    entry.recipients?.clear?.();
+    entry.pending?.forEach((pending) => pending.resolve?.());
+    entry.pending = [];
+    this.#httpSignalQueues.delete(roomId);
+  }
+
+  #enqueueHttpSignals(roomId, recipientId, events) {
+    if (!roomId || !recipientId || !events?.length) {
+      return Promise.resolve();
+    }
+
+    let entry = this.#httpSignalQueues.get(roomId);
+
+    if (!entry) {
+      entry = {
+        recipients: new Map(),
+        pending: [],
+      };
+
+      this.#httpSignalQueues.set(roomId, entry);
+    }
+
+    const roomQueue = entry.recipients;
+    const existingEvents = roomQueue.get(recipientId);
+
+    if (existingEvents) {
+      existingEvents.push(...events);
+    } else {
+      roomQueue.set(recipientId, [...events]);
+    }
+
+    const promise = new Promise((resolve, reject) => {
+      entry.pending.push({ resolve, reject });
+    });
+
+    this.#scheduleHttpFlush(roomId);
+
+    return promise;
+  }
+
+  #scheduleHttpFlush(roomId) {
+    if (this.#httpSignalFlushTimers.has(roomId)) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      this.#httpSignalFlushTimers.delete(roomId);
+      this.#flushHttpSignals(roomId).catch((error) => {
+        // eslint-disable-next-line no-console
+        console.warn("[resenha] failed to flush HTTP signal queue", error);
+      });
+    }, ResenhaWebrtcService.#httpBatchDelayMs);
+
+    this.#httpSignalFlushTimers.set(roomId, timer);
+  }
+
+  async #flushHttpSignals(roomId) {
+    const entry = this.#httpSignalQueues.get(roomId);
+    if (!entry) {
+      return;
+    }
+
+    if (!this.#activeRoomIds.has(roomId)) {
+      entry.recipients?.clear?.();
+      entry.pending.splice(0).forEach((pending) => pending.resolve?.());
+      this.#httpSignalQueues.delete(roomId);
+      return;
+    }
+
+    const roomQueue = entry.recipients;
+    if (!roomQueue?.size) {
+      entry.pending.splice(0).forEach((pending) => pending.resolve?.());
+      return;
+    }
+
+    const messages = [];
+
+    roomQueue.forEach((events, recipientId) => {
+      if (!events?.length) {
+        return;
+      }
+
+      messages.push({
+        recipient_id: recipientId,
+        events,
+      });
+    });
+
+    roomQueue.clear();
+
+    if (!messages.length) {
+      entry.pending.splice(0).forEach((pending) => pending.resolve?.());
+      return;
+    }
+
+    const payload = this.#buildSignalPayload(messages);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `[resenha] 🚀 sending ${messages.length} batched signal recipient(s) in room ${roomId}`
+    );
+
+    try {
+      await ajax(`/resenha/rooms/${roomId}/signal`, {
+        type: "POST",
+        data: { payload },
+      });
+
+      entry.pending.splice(0).forEach((pending) => pending.resolve?.());
+    } catch (error) {
+      entry.pending.splice(0).forEach((pending) => pending.reject?.(error));
+      throw error;
+    }
+  }
+
+  #buildSignalPayload(messages) {
+    if (messages.length === 1) {
+      const [message] = messages;
+
+      if (message.events.length === 1) {
+        return {
+          ...message.events[0],
+          recipient_id: message.recipient_id,
+        };
+      }
+
+      return {
+        recipient_id: message.recipient_id,
+        events: message.events,
+      };
+    }
+
+    return {
+      messages: messages.map((message) => ({
+        recipient_id: message.recipient_id,
+        events: message.events,
+      })),
+    };
   }
 
   async #restartPeerConnection(roomId, remoteUserId) {
