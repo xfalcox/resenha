@@ -26,10 +26,17 @@ export default class ResenhaWebrtcService extends Service {
   #signalFlushTimers = new Map();
   #httpSignalQueues = new Map();
   #httpSignalFlushTimers = new Map();
+  #pendingCandidates = new Map();
+  #restartAttempts = new Map();
+  #offerRetryAttempts = new Map();
+  #connectionTimeouts = new Map();
 
   static #candidateBatchDelayMs = 75;
   static #candidateBatchSize = 5;
   static #httpBatchDelayMs = 25;
+  static #maxRestartAttempts = 5;
+  static #maxOfferRetries = 3;
+  static #connectionTimeoutMs = 30000;
 
   willDestroy() {
     super.willDestroy(...arguments);
@@ -51,6 +58,11 @@ export default class ResenhaWebrtcService extends Service {
     });
     this.#httpSignalQueues.clear();
     this.#signalQueues.clear();
+    this.#pendingCandidates.clear();
+    this.#restartAttempts.clear();
+    this.#offerRetryAttempts.clear();
+    this.#connectionTimeouts.forEach((timer) => clearTimeout(timer));
+    this.#connectionTimeouts.clear();
   }
 
   /**
@@ -240,12 +252,19 @@ export default class ResenhaWebrtcService extends Service {
       pc.close();
       this.#clearOfferRetry(roomId, remoteUserId);
       this.#clearPeerRestart(roomId, remoteUserId);
+      this.#clearConnectionTimeout(roomId, remoteUserId);
+      this.#clearPendingCandidates(roomId, remoteUserId);
     });
     this.#peerConnections.delete(roomId);
     this.#removeAllRemoteStreams(roomId);
     this.#teardownRoomMonitors(roomId);
     this.#clearSignalQueuesForRoom(roomId);
     this.#clearHttpSignalQueue(roomId);
+  }
+
+  #clearPendingCandidates(roomId, remoteUserId) {
+    const key = this.remotePeerKey(roomId, remoteUserId);
+    this.#pendingCandidates.delete(key);
   }
 
   async #createPeerConnection(roomId, remoteUserId) {
@@ -301,11 +320,13 @@ export default class ResenhaWebrtcService extends Service {
       if (pc.connectionState === "connected") {
         this.#clearOfferRetry(roomId, remoteUserId);
         this.#clearPeerRestart(roomId, remoteUserId);
+        this.#clearConnectionTimeout(roomId, remoteUserId);
         return;
       }
 
       if (pc.connectionState === "failed") {
         this.#clearOfferRetry(roomId, remoteUserId);
+        this.#clearConnectionTimeout(roomId, remoteUserId);
         this.#schedulePeerRestart(roomId, remoteUserId, { immediate: true });
         return;
       }
@@ -318,6 +339,7 @@ export default class ResenhaWebrtcService extends Service {
       if (pc.connectionState === "closed") {
         this.#clearOfferRetry(roomId, remoteUserId);
         this.#clearPeerRestart(roomId, remoteUserId);
+        this.#clearConnectionTimeout(roomId, remoteUserId);
         this.#removeRemoteStream(roomId, remoteUserId);
       }
     };
@@ -330,7 +352,45 @@ export default class ResenhaWebrtcService extends Service {
       }
     };
 
+    // Start connection establishment timeout
+    this.#startConnectionTimeout(roomId, remoteUserId, pc);
+
     return pc;
+  }
+
+  #startConnectionTimeout(roomId, remoteUserId, pc) {
+    const key = this.remotePeerKey(roomId, remoteUserId);
+
+    if (this.#connectionTimeouts.has(key)) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      this.#connectionTimeouts.delete(key);
+
+      if (
+        pc.connectionState !== "connected" &&
+        pc.connectionState !== "closed"
+      ) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[resenha] connection timeout (${ResenhaWebrtcService.#connectionTimeoutMs}ms) for user ${remoteUserId}, state: ${pc.connectionState}`
+        );
+        this.#schedulePeerRestart(roomId, remoteUserId, { immediate: true });
+      }
+    }, ResenhaWebrtcService.#connectionTimeoutMs);
+
+    this.#connectionTimeouts.set(key, timer);
+  }
+
+  #clearConnectionTimeout(roomId, remoteUserId) {
+    const key = this.remotePeerKey(roomId, remoteUserId);
+    const timer = this.#connectionTimeouts.get(key);
+
+    if (timer) {
+      clearTimeout(timer);
+      this.#connectionTimeouts.delete(key);
+    }
   }
 
   async #handleRoomMessage(roomId, payload) {
@@ -361,19 +421,118 @@ export default class ResenhaWebrtcService extends Service {
 
     if (data.type === "offer") {
       this.#clearOfferRetry(roomId, remoteUserId);
-      await pc.setRemoteDescription(new RTCSessionDescription(data));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      this.#sendSignal(roomId, remoteUserId, answer).catch((error) => {
+
+      // Handle glare condition: both peers send offers simultaneously
+      if (pc.signalingState === "have-local-offer") {
+        // Use polite peer pattern: lower user ID yields
+        if (this.currentUser?.id < remoteUserId) {
+          // eslint-disable-next-line no-console
+          console.log(
+            `[resenha] glare detected, rolling back local offer for user ${remoteUserId}`
+          );
+          await pc.setLocalDescription({ type: "rollback" });
+        } else {
+          // eslint-disable-next-line no-console
+          console.log(
+            `[resenha] glare detected, ignoring remote offer from user ${remoteUserId}`
+          );
+          return;
+        }
+      }
+
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(data));
+        await this.#flushPendingCandidates(roomId, remoteUserId, pc);
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        this.#sendSignal(roomId, remoteUserId, answer).catch((error) => {
+          // eslint-disable-next-line no-console
+          console.warn("[resenha] failed to send answer", error);
+        });
+      } catch (error) {
         // eslint-disable-next-line no-console
-        console.warn("[resenha] failed to send answer", error);
-      });
+        console.warn(
+          `[resenha] failed to handle offer from user ${remoteUserId}`,
+          error
+        );
+      }
     } else if (data.type === "answer") {
       this.#clearOfferRetry(roomId, remoteUserId);
-      await pc.setRemoteDescription(new RTCSessionDescription(data));
+
+      if (pc.signalingState !== "have-local-offer") {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[resenha] ignoring answer in state ${pc.signalingState} from user ${remoteUserId}`
+        );
+        return;
+      }
+
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(data));
+        await this.#flushPendingCandidates(roomId, remoteUserId, pc);
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[resenha] failed to handle answer from user ${remoteUserId}`,
+          error
+        );
+      }
     } else if (data.type === "candidate") {
       this.#clearOfferRetry(roomId, remoteUserId);
-      await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+
+      // Queue candidates if remote description not yet set
+      if (!pc.remoteDescription) {
+        this.#queuePendingCandidate(roomId, remoteUserId, data.candidate);
+        return;
+      }
+
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[resenha] failed to add ICE candidate from user ${remoteUserId}`,
+          error
+        );
+      }
+    }
+  }
+
+  #queuePendingCandidate(roomId, remoteUserId, candidate) {
+    const key = this.remotePeerKey(roomId, remoteUserId);
+    const queue = this.#pendingCandidates.get(key) || [];
+    queue.push(candidate);
+    this.#pendingCandidates.set(key, queue);
+    // eslint-disable-next-line no-console
+    console.log(
+      `[resenha] queued ICE candidate for user ${remoteUserId} (${queue.length} pending)`
+    );
+  }
+
+  async #flushPendingCandidates(roomId, remoteUserId, pc) {
+    const key = this.remotePeerKey(roomId, remoteUserId);
+    const candidates = this.#pendingCandidates.get(key);
+
+    if (!candidates?.length) {
+      return;
+    }
+
+    this.#pendingCandidates.delete(key);
+    // eslint-disable-next-line no-console
+    console.log(
+      `[resenha] flushing ${candidates.length} queued ICE candidates for user ${remoteUserId}`
+    );
+
+    for (const candidate of candidates) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[resenha] failed to add queued ICE candidate for user ${remoteUserId}`,
+          error
+        );
+      }
     }
   }
 
@@ -555,10 +714,29 @@ export default class ResenhaWebrtcService extends Service {
       return;
     }
 
+    const attempts = this.#offerRetryAttempts.get(key) || 0;
+
+    if (attempts >= ResenhaWebrtcService.#maxOfferRetries) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[resenha] max offer retries (${ResenhaWebrtcService.#maxOfferRetries}) reached for user ${remoteUserId}`
+      );
+      return;
+    }
+
+    // Exponential backoff: 2s → 4s → 8s
+    const actualDelay = delay * Math.pow(2, attempts);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `[resenha] scheduling offer retry for user ${remoteUserId} (attempt ${attempts + 1}/${ResenhaWebrtcService.#maxOfferRetries}, delay ${actualDelay}ms)`
+    );
+
     const timer = setTimeout(async () => {
       this.#offerRetryTimers.delete(key);
+      this.#offerRetryAttempts.set(key, attempts + 1);
       await this.#initiateOffer(roomId, remoteUserId);
-    }, delay);
+    }, actualDelay);
 
     this.#offerRetryTimers.set(key, timer);
   }
@@ -567,12 +745,13 @@ export default class ResenhaWebrtcService extends Service {
     const key = this.remotePeerKey(roomId, remoteUserId);
     const timer = this.#offerRetryTimers.get(key);
 
-    if (!timer) {
-      return;
+    if (timer) {
+      clearTimeout(timer);
+      this.#offerRetryTimers.delete(key);
     }
 
-    clearTimeout(timer);
-    this.#offerRetryTimers.delete(key);
+    // Reset retry attempts on successful signal
+    this.#offerRetryAttempts.delete(key);
   }
 
   #ensureAudioMonitor(roomId, userId, stream) {
@@ -803,7 +982,7 @@ export default class ResenhaWebrtcService extends Service {
       return;
     }
 
-    // Send heartbeat every 10 seconds (TTL is 15 seconds, so this gives us buffer)
+    // Send heartbeat every 10 seconds (TTL is 30 seconds, so this gives us buffer)
     const timer = setInterval(async () => {
       if (!this.#activeRoomIds.has(roomId)) {
         this.#stopHeartbeat(roomId);
@@ -840,15 +1019,34 @@ export default class ResenhaWebrtcService extends Service {
       return;
     }
 
-    const delay = options.immediate ? 200 : 1500;
     const key = this.remotePeerKey(roomId, remoteUserId);
 
     if (this.#peerReconnectTimers.has(key)) {
       return;
     }
 
+    const attempts = this.#restartAttempts.get(key) || 0;
+
+    if (attempts >= ResenhaWebrtcService.#maxRestartAttempts) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[resenha] max restart attempts (${ResenhaWebrtcService.#maxRestartAttempts}) reached for user ${remoteUserId}`
+      );
+      return;
+    }
+
+    // Exponential backoff: 200ms → 400ms → 800ms → 1600ms → 3200ms (capped at 5000ms)
+    const baseDelay = options.immediate ? 200 : 1500;
+    const delay = Math.min(baseDelay * Math.pow(2, attempts), 5000);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `[resenha] scheduling peer restart for user ${remoteUserId} (attempt ${attempts + 1}/${ResenhaWebrtcService.#maxRestartAttempts}, delay ${delay}ms)`
+    );
+
     const timer = setTimeout(() => {
       this.#peerReconnectTimers.delete(key);
+      this.#restartAttempts.set(key, attempts + 1);
       this.#restartPeerConnection(roomId, remoteUserId).catch((error) => {
         // eslint-disable-next-line no-console
         console.warn("[resenha] failed to restart peer connection", error);
@@ -861,12 +1059,14 @@ export default class ResenhaWebrtcService extends Service {
   #clearPeerRestart(roomId, remoteUserId) {
     const key = this.remotePeerKey(roomId, remoteUserId);
     const timer = this.#peerReconnectTimers.get(key);
-    if (!timer) {
-      return;
+
+    if (timer) {
+      clearTimeout(timer);
+      this.#peerReconnectTimers.delete(key);
     }
 
-    clearTimeout(timer);
-    this.#peerReconnectTimers.delete(key);
+    // Reset restart attempts on successful connection
+    this.#restartAttempts.delete(key);
   }
 
   #clearSignalQueuesForRoom(roomId) {
@@ -1061,6 +1261,8 @@ export default class ResenhaWebrtcService extends Service {
 
     this.#removeRemoteStream(roomId, remoteUserId);
     this.#clearOfferRetry(roomId, remoteUserId);
+    this.#clearConnectionTimeout(roomId, remoteUserId);
+    this.#clearPendingCandidates(roomId, remoteUserId);
 
     await this.#createPeerConnection(roomId, remoteUserId);
 
