@@ -17,3 +17,27 @@ en:
       memberships:
         add_user: "Add participant"
         remove_user: "Remove participant"
+      admin:
+        title: "Resenha"
+        rooms_title: "Voice Rooms"
+        create_room: "Add room"
+        edit: "Edit"
+        update: "Update"
+        create: "Create"
+        back: "Back"
+        no_rooms_yet: "No voice rooms configured yet."
+        room_created: "Room created successfully."
+        room_updated: "Room updated successfully."
+        destroy_room:
+          confirm: "Are you sure you want to delete '%{name}'?"
+        room:
+          name: "Name"
+          name_placeholder: "Room name"
+          description: "Description"
+          public: "Public"
+          public_help: "Public rooms are visible to all users."
+          max_participants: "Max participants"
+          max_participants_help: "Maximum participants allowed (2-50)."
+          member_count: "Members"
+          creator: "Created by"
+          created_at: "Created"
