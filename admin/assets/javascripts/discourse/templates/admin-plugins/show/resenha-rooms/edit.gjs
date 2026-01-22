@@ -1,6 +1,6 @@
 import ResenhaRoomForm from "discourse/plugins/resenha/admin/components/resenha-room-form";
 
-export default <template>
+<template>
   <ResenhaRoomForm
     @room={{@controller.model}}
     @onSave={{@controller.saveRoom}}

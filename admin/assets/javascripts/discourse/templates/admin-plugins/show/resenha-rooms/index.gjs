@@ -1,6 +1,6 @@
 import ResenhaRoomList from "discourse/plugins/resenha/admin/components/resenha-room-list";
 
-export default <template>
+<template>
   <ResenhaRoomList
     @rooms={{@controller.model.content}}
     @onDestroy={{@controller.destroyRoom}}
