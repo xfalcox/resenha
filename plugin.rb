@@ -12,6 +12,9 @@ register_svg_icon "microphone-lines"
 register_svg_icon "phone"
 register_svg_icon "waveform"
 register_asset "stylesheets/common/resenha.scss"
+register_asset "stylesheets/common/resenha-admin.scss", :admin
+
+add_admin_route "resenha.admin.title", "resenha", use_new_show_route: true
 
 require_relative "lib/resenha"
 

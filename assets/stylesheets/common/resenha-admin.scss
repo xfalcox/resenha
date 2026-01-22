@@ -1,0 +1,23 @@
+.resenha-rooms-table {
+  .resenha-rooms {
+    .resenha-rooms__name {
+      font-weight: 600;
+    }
+
+    .resenha-rooms__controls {
+      display: flex;
+      gap: 0.5em;
+      justify-content: flex-end;
+    }
+  }
+}
+
+.resenha-room-form {
+  .resenha-admin-back {
+    margin-bottom: 1em;
+  }
+
+  .resenha-room-form__form {
+    max-width: 600px;
+  }
+}
