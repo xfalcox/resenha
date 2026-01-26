@@ -40,6 +40,7 @@ export default class ResenhaWebrtcService extends Service {
 
   willDestroy() {
     super.willDestroy(...arguments);
+    this.#stopLocalStream();
     this.#roomSubscriptions.forEach((callback, channel) => {
       this.messageBus.unsubscribe(channel, callback);
     });
@@ -135,11 +136,17 @@ export default class ResenhaWebrtcService extends Service {
     console.log(`[resenha] joining room ${room.id}`);
 
     if (!this.localStream) {
-      this.localStream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-      });
-      // eslint-disable-next-line no-console
-      console.log("[resenha] local stream obtained");
+      try {
+        this.localStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
+        // eslint-disable-next-line no-console
+        console.log("[resenha] local stream obtained");
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.warn("[resenha] failed to obtain local stream", error);
+        return;
+      }
     }
 
     // Subscribe to MessageBus BEFORE joining to avoid missing the participant broadcast
@@ -179,6 +186,7 @@ export default class ResenhaWebrtcService extends Service {
     this.#teardownAudioMonitor(room.id, this.currentUser?.id);
     this.#stopHeartbeat(room.id);
     this.#teardownRoom(room.id);
+    this.#stopLocalStream();
   }
 
   @action
@@ -286,7 +294,8 @@ export default class ResenhaWebrtcService extends Service {
     });
 
     pc.ontrack = (event) => {
-      this.#registerRemoteStream(roomId, remoteUserId, event.streams[0]);
+      const stream = event.streams?.[0] || new MediaStream([event.track]);
+      this.#registerRemoteStream(roomId, remoteUserId, stream);
     };
 
     pc.onicecandidate = (event) => {
@@ -625,6 +634,9 @@ export default class ResenhaWebrtcService extends Service {
         this.#removeRemoteStream(roomId, remoteUserId);
         this.#clearPeerRestart(roomId, remoteUserId);
         this.#clearOfferRetry(roomId, remoteUserId);
+        this.#clearConnectionTimeout(roomId, remoteUserId);
+        this.#clearPendingCandidates(roomId, remoteUserId);
+        this.#clearSignalQueue(roomId, remoteUserId);
       }
     });
 
@@ -1014,6 +1026,15 @@ export default class ResenhaWebrtcService extends Service {
     }
   }
 
+  #stopLocalStream() {
+    if (!this.localStream) {
+      return;
+    }
+
+    this.localStream.getTracks().forEach((track) => track.stop());
+    this.localStream = null;
+  }
+
   #schedulePeerRestart(roomId, remoteUserId, options = {}) {
     if (!this.#activeRoomIds.has(roomId)) {
       return;
@@ -1086,6 +1107,18 @@ export default class ResenhaWebrtcService extends Service {
 
       this.#signalQueues.delete(key);
     });
+  }
+
+  #clearSignalQueue(roomId, remoteUserId) {
+    const key = this.remotePeerKey(roomId, remoteUserId);
+    const timer = this.#signalFlushTimers.get(key);
+
+    if (timer) {
+      clearTimeout(timer);
+      this.#signalFlushTimers.delete(key);
+    }
+
+    this.#signalQueues.delete(key);
   }
 
   #clearHttpSignalQueue(roomId) {
