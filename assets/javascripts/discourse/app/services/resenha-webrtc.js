@@ -132,6 +132,13 @@ export default class ResenhaWebrtcService extends Service {
       return;
     }
 
+    // Leave any other active rooms first (rooms are mutually exclusive)
+    for (const activeRoomId of this.#activeRoomIds) {
+      if (activeRoomId !== room.id) {
+        this.leave({ id: activeRoomId });
+      }
+    }
+
     // eslint-disable-next-line no-console
     console.log(`[resenha] joining room ${room.id}`);
 
