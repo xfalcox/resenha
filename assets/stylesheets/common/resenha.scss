@@ -1,5 +1,6 @@
 .resenha-sidebar-participant {
   padding-left: 1.5rem;
+  position: relative;
 
   .sidebar-section-link-prefix {
     img {
@@ -15,10 +16,59 @@
   }
 
   &--speaking {
-    .sidebar-section-link-prefix img {
-      border: 2px solid var(--success);
-      box-shadow: 0 0 0 1px var(--success);
+    &::before {
+      content: "";
+      position: absolute;
+      left: 0.25rem;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      height: 0.875rem;
+      width: 0.875rem;
+      background:
+        linear-gradient(var(--success), var(--success)) 0 50%,
+        linear-gradient(var(--success), var(--success)) 5px 50%,
+        linear-gradient(var(--success), var(--success)) 10px 50%;
+      background-size:
+        3px 40%,
+        3px 70%,
+        3px 50%;
+      background-repeat: no-repeat;
+      animation: resenha-audio-bars 0.8s ease-in-out infinite;
     }
+  }
+}
+
+@keyframes resenha-audio-bars {
+  0%,
+  100% {
+    background-size:
+      3px 40%,
+      3px 70%,
+      3px 50%;
+  }
+
+  25% {
+    background-size:
+      3px 70%,
+      3px 40%,
+      3px 80%;
+  }
+
+  50% {
+    background-size:
+      3px 50%,
+      3px 90%,
+      3px 40%;
+  }
+
+  75% {
+    background-size:
+      3px 80%,
+      3px 50%,
+      3px 70%;
   }
 }
 
