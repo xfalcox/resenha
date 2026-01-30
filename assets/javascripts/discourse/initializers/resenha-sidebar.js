@@ -1,13 +1,11 @@
-import { htmlSafe } from "@ember/template";
 import noop from "discourse/helpers/noop";
-import { avatarImg } from "discourse/lib/avatar-utils";
+import { avatarUrl } from "discourse/lib/avatar-utils";
 import { withPluginApi } from "discourse/lib/plugin-api";
-import { escapeExpression, isiPad } from "discourse/lib/utilities";
+import { isiPad } from "discourse/lib/utilities";
 import { i18n } from "discourse-i18n";
 import ResenhaRoomSidebarContextMenu from "discourse/plugins/resenha/discourse/components/resenha-room-sidebar-context-menu";
 
 const LINK_NAME_PREFIX = "resenha-room-";
-const MAX_INLINE_AVATARS = 11;
 let sidebarClickHandler;
 
 export default {
@@ -80,10 +78,6 @@ export default {
               classes.push("sidebar-section-link--active");
             }
 
-            if (this.hasParticipants) {
-              classes.push("resenha-sidebar-link--has-participants");
-            }
-
             return classes.join(" ");
           }
 
@@ -112,15 +106,7 @@ export default {
           }
 
           get text() {
-            const participants = this.participantsForSummary;
-
-            if (!participants.length) {
-              return this.room.name;
-            }
-
-            const markup = this.participantsMarkup(participants);
-
-            return markup || this.room.name;
+            return this.room.name;
           }
 
           get prefixType() {
@@ -131,11 +117,7 @@ export default {
             return "microphone-lines";
           }
 
-          get hasParticipants() {
-            return this.participantsForSummary.length > 0;
-          }
-
-          get participantsForSummary() {
+          getParticipantsForSummary() {
             const participants = this.room.active_participants || [];
 
             if (!this.currentUser) {
@@ -167,67 +149,51 @@ export default {
               },
             ];
           }
+        };
 
-          displayName(participant) {
-            return participant?.name || participant?.username;
+        const ParticipantLink = class extends BaseLink {
+          constructor({ room, participant }) {
+            super(...arguments);
+            this.room = room;
+            this.participant = participant;
           }
 
-          participantTooltip(participants) {
-            return participants
-              .map((participant) => this.displayName(participant))
-              .filter(Boolean)
-              .join(", ");
+          get name() {
+            return `resenha-participant-${this.room.id}-${this.participant.id}`;
           }
 
-          participantAvatar(participant) {
-            if (!participant?.avatar_template) {
-              return "";
+          get classNames() {
+            const classes = ["resenha-sidebar-participant"];
+
+            if (this.participant.is_speaking) {
+              classes.push("resenha-sidebar-participant--speaking");
             }
 
-            const extraClasses = participant?.is_speaking
-              ? "resenha-sidebar-link__avatar resenha-sidebar-link__avatar--speaking"
-              : "resenha-sidebar-link__avatar";
-
-            return avatarImg({
-              avatarTemplate: participant.avatar_template,
-              size: "tiny",
-              extraClasses,
-              title: this.displayName(participant),
-              loading: "lazy",
-            });
+            return classes.join(" ");
           }
 
-          participantsMarkup(participants) {
-            const inlineParticipants = participants.slice(
-              0,
-              MAX_INLINE_AVATARS
-            );
-            const avatarHtml = inlineParticipants
-              .map((participant) => this.participantAvatar(participant))
-              .join("");
+          get route() {
+            return "discovery";
+          }
 
-            if (!avatarHtml) {
-              return null;
-            }
+          get currentWhen() {
+            return false;
+          }
 
-            const remaining = Math.max(
-              participants.length - inlineParticipants.length,
-              0
-            );
-            const remainderHtml = remaining
-              ? `<span class="resenha-sidebar-link__more">+${remaining}</span>`
-              : "";
+          get title() {
+            return this.participant.name || this.participant.username;
+          }
 
-            const label = escapeExpression(
-              this.participantTooltip(participants) || this.room.name
-            );
-            const labelledAttrs = label
-              ? ` aria-label="${label}" title="${label}"`
-              : "";
+          get text() {
+            return this.participant.name || this.participant.username;
+          }
 
-            return htmlSafe(
-              `<span class="resenha-sidebar-link__participants"${labelledAttrs}>${avatarHtml}${remainderHtml}</span>`
-            );
+          get prefixType() {
+            return "image";
+          }
+
+          get prefixValue() {
+            return avatarUrl(this.participant.avatar_template, "small");
           }
         };
 
@@ -246,15 +212,23 @@ export default {
           }
 
           get links() {
-            return (this.resenhaRooms?.rooms || []).map(
-              (room) =>
-                new RoomsLink({
-                  room,
-                  webrtcService: resenhaWebrtc,
-                  user: currentUser,
-                  menu: menuService,
-                })
-            );
+            const result = [];
+
+            for (const room of this.resenhaRooms?.rooms || []) {
+              const roomLink = new RoomsLink({
+                room,
+                webrtcService: resenhaWebrtc,
+                user: currentUser,
+                menu: menuService,
+              });
+              result.push(roomLink);
+
+              for (const participant of roomLink.getParticipantsForSummary()) {
+                result.push(new ParticipantLink({ room, participant }));
+              }
+            }
+
+            return result;
           }
         };
 
@@ -266,28 +240,35 @@ export default {
       }
 
       sidebarClickHandler = async (event) => {
-        const anchor =
+        const findAnchor = (selector) =>
           event
             .composedPath?.()
             ?.find?.(
-              (node) =>
-                node instanceof HTMLElement &&
-                node.matches?.(
-                  ".sidebar-section-link[data-link-name^='resenha-room-']"
-                )
-            ) ||
-          event.target?.closest?.(
-            ".sidebar-section-link[data-link-name^='resenha-room-']"
-          );
+              (node) => node instanceof HTMLElement && node.matches?.(selector)
+            ) || event.target?.closest?.(selector);
 
-        if (!anchor) {
+        const participantAnchor = findAnchor(
+          ".sidebar-section-link[data-link-name^='resenha-participant-']"
+        );
+
+        if (participantAnchor) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+
+        const roomAnchor = findAnchor(
+          ".sidebar-section-link[data-link-name^='resenha-room-']"
+        );
+
+        if (!roomAnchor) {
           return;
         }
 
         event.preventDefault();
         event.stopPropagation();
 
-        const linkName = anchor.dataset?.linkName;
+        const linkName = roomAnchor.dataset?.linkName;
         if (!linkName?.startsWith(LINK_NAME_PREFIX)) {
           return;
         }

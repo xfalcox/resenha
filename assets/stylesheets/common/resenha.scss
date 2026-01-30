@@ -1,37 +1,24 @@
-.resenha-sidebar-link__participants {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.25em;
-}
+.resenha-sidebar-participant {
+  padding-left: 1.5rem;
 
-.resenha-sidebar-link__avatar {
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: 50%;
-  border: 1px solid var(--primary-very-low);
-  box-sizing: border-box;
-
-  &--speaking {
-    border-color: var(--success);
-    box-shadow: 0 0 0 1px var(--success);
+  .sidebar-section-link-prefix {
+    img {
+      width: 1.25rem;
+      height: 1.25rem;
+      border-radius: 50%;
+    }
   }
-}
-
-.resenha-sidebar-link__more {
-  font-size: var(--font-down-1);
-  color: var(--primary-medium);
-}
-
-.resenha-sidebar-link--has-participants {
-  height: auto;
-  padding-top: 0.5em;
-  padding-bottom: 0.5em;
 
   .sidebar-section-link-content-text {
-    white-space: normal;
-    overflow: visible;
-    text-overflow: clip;
+    font-size: var(--font-down-1);
+    color: var(--primary-high);
+  }
+
+  &--speaking {
+    .sidebar-section-link-prefix img {
+      border: 2px solid var(--success);
+      box-shadow: 0 0 0 1px var(--success);
+    }
   }
 }
 
