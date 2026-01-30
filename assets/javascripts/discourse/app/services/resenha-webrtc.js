@@ -30,6 +30,10 @@ export default class ResenhaWebrtcService extends Service {
   #restartAttempts = new Map();
   #offerRetryAttempts = new Map();
   #connectionTimeouts = new Map();
+  #participantVolumes = new Map();
+  #participantMuted = new Map();
+  #audioElements = new Map();
+  #streamToParticipant = new WeakMap();
 
   static #candidateBatchDelayMs = 75;
   static #candidateBatchSize = 5;
@@ -209,9 +213,18 @@ export default class ResenhaWebrtcService extends Service {
     element.srcObject = stream;
     element.autoplay = true;
     element.playsInline = true;
-    element.muted = stream === this.localStream;
-    if (element.muted) {
+
+    const isLocal = stream === this.localStream;
+    if (isLocal) {
+      element.muted = true;
       element.volume = 0;
+    } else {
+      const participant = this.#streamToParticipant.get(stream);
+      if (participant) {
+        const { roomId, userId } = participant;
+        this.#trackAudioElement(roomId, userId, element);
+        this.#applyAudioSettings(roomId, userId);
+      }
     }
 
     if (typeof element.play === "function") {
@@ -238,6 +251,59 @@ export default class ResenhaWebrtcService extends Service {
 
   remotePeerKey(roomId, userId) {
     return `${roomId}:${userId}`;
+  }
+
+  setParticipantVolume(roomId, userId, volume) {
+    const key = this.remotePeerKey(roomId, userId);
+    const clampedVolume = Math.max(0, Math.min(1, volume));
+    this.#participantVolumes.set(key, clampedVolume);
+    this.#applyAudioSettings(roomId, userId);
+  }
+
+  getParticipantVolume(roomId, userId) {
+    const key = this.remotePeerKey(roomId, userId);
+    return this.#participantVolumes.get(key) ?? 1;
+  }
+
+  toggleParticipantMute(roomId, userId) {
+    const key = this.remotePeerKey(roomId, userId);
+    const currentlyMuted = this.#participantMuted.get(key) ?? false;
+    const newMutedState = !currentlyMuted;
+    this.#participantMuted.set(key, newMutedState);
+    this.#applyAudioSettings(roomId, userId);
+    this.resenhaRooms?.setParticipantMuted(roomId, userId, newMutedState);
+    return newMutedState;
+  }
+
+  isParticipantMuted(roomId, userId) {
+    const key = this.remotePeerKey(roomId, userId);
+    return this.#participantMuted.get(key) ?? false;
+  }
+
+  #applyAudioSettings(roomId, userId) {
+    const key = this.remotePeerKey(roomId, userId);
+    const element = this.#audioElements.get(key);
+    if (!element) {
+      return;
+    }
+
+    const muted = this.#participantMuted.get(key) ?? false;
+    const volume = this.#participantVolumes.get(key) ?? 1;
+
+    element.muted = muted;
+    if (!muted) {
+      element.volume = volume;
+    }
+  }
+
+  #trackAudioElement(roomId, userId, element) {
+    const key = this.remotePeerKey(roomId, userId);
+    this.#audioElements.set(key, element);
+  }
+
+  #untrackAudioElement(roomId, userId) {
+    const key = this.remotePeerKey(roomId, userId);
+    this.#audioElements.delete(key);
   }
 
   #subscribeToRoom(roomId) {
@@ -423,6 +489,8 @@ export default class ResenhaWebrtcService extends Service {
       await this.#handleSignal(roomId, payload);
     } else if (payload.type === "participants") {
       await this.#handleParticipants(roomId, payload);
+    } else if (payload.type === "kicked") {
+      this.#handleKicked(roomId);
     }
   }
 
@@ -673,6 +741,12 @@ export default class ResenhaWebrtcService extends Service {
         }
       }
     }
+  }
+
+  #handleKicked(roomId) {
+    // eslint-disable-next-line no-console
+    console.log(`[resenha] kicked from room ${roomId}`);
+    this.leave({ id: roomId });
   }
 
   #currentUserParticipant() {
@@ -933,6 +1007,7 @@ export default class ResenhaWebrtcService extends Service {
     }
 
     this.#remoteStreams.set(roomId, next);
+    this.#streamToParticipant.set(stream, { roomId, userId: remoteUserId });
     this.#bumpRemoteStreamsRevision();
     this.#ensureAudioMonitor(roomId, remoteUserId, stream);
   }
@@ -963,6 +1038,7 @@ export default class ResenhaWebrtcService extends Service {
 
     this.#bumpRemoteStreamsRevision();
     this.#teardownAudioMonitor(roomId, remoteUserId);
+    this.#untrackAudioElement(roomId, remoteUserId);
   }
 
   #bumpRemoteStreamsRevision() {

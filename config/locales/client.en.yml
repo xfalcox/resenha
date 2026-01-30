@@ -16,6 +16,12 @@ en:
         mic_on: "Mute microphone"
         mic_off: "Unmute microphone"
         connection_error: "We couldn't start a WebRTC session. Please ensure your browser has microphone permissions."
+      participant:
+        menu_title: "Participant options"
+        volume: "Volume"
+        mute: "Mute"
+        unmute: "Unmute"
+        kick: "Kick from room"
       room_info:
         title: "Room Info"
         status: "Status"

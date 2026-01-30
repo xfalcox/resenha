@@ -6,6 +6,10 @@ module Resenha
       new(room).publish_participants
     end
 
+    def self.publish_kick(room, user_id)
+      new(room).publish_kick(user_id)
+    end
+
     def initialize(room)
       @room = room
     end
@@ -21,11 +25,7 @@ module Resenha
             .map { |user| BasicUserSerializer.new(user, scope: guardian, root: false).as_json },
       }
 
-      MessageBus.publish(
-        Resenha.room_channel(room.id),
-        payload,
-        **room.message_bus_targets,
-      )
+      MessageBus.publish(Resenha.room_channel(room.id), payload, **room.message_bus_targets)
     end
 
     def publish_room(payload)
@@ -33,6 +33,14 @@ module Resenha
         Resenha.room_channel(room.id),
         payload.merge(room_id: room.id),
         **room.message_bus_targets,
+      )
+    end
+
+    def publish_kick(user_id)
+      MessageBus.publish(
+        Resenha.room_channel(room.id),
+        { type: "kicked", room_id: room.id },
+        user_ids: [user_id],
       )
     end
 

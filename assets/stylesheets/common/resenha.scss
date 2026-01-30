@@ -39,6 +39,17 @@
       animation: resenha-audio-bars 0.8s ease-in-out infinite;
     }
   }
+
+  &--muted {
+    .sidebar-section-link-prefix img {
+      opacity: 0.5;
+    }
+
+    .sidebar-section-link-content-text {
+      opacity: 0.5;
+      text-decoration: line-through;
+    }
+  }
 }
 
 @keyframes resenha-audio-bars {
@@ -128,6 +139,40 @@
   .btn {
     width: 100%;
     justify-content: flex-start;
+  }
+}
+
+.resenha-participant-sidebar-context-menu {
+  min-width: 200px;
+
+  .btn {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  &__volume {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  &__volume-label {
+    font-size: var(--font-down-1);
+    color: var(--primary-medium);
+  }
+
+  &__volume-slider {
+    width: 100%;
+    cursor: pointer;
+  }
+
+  &__kick-btn {
+    color: var(--danger);
+
+    &:hover {
+      background: var(--danger-low);
+    }
   }
 }
 

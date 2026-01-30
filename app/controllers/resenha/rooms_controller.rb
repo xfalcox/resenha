@@ -2,7 +2,7 @@
 
 module Resenha
   class RoomsController < ApplicationController
-    before_action :load_room, only: %i[show update destroy join leave participants signal]
+    before_action :load_room, only: %i[show update destroy join leave participants signal kick]
 
     def index
       Resenha::DefaultRoomSeeder.ensure!
@@ -85,6 +85,26 @@ module Resenha
                    root: false,
                  ),
              }
+    end
+
+    def kick
+      guardian.ensure_can_manage_resenha_room!(@room)
+
+      user_id = params.require(:user_id).to_i
+
+      if user_id == current_user.id
+        raise Discourse::InvalidParameters.new(I18n.t("resenha.errors.cannot_kick_self"))
+      end
+
+      if user_id == @room.creator_id
+        raise Discourse::InvalidParameters.new(I18n.t("resenha.errors.cannot_kick_creator"))
+      end
+
+      Resenha::ParticipantTracker.remove(@room.id, user_id)
+      Resenha::RoomBroadcaster.publish_kick(@room, user_id)
+      Resenha::RoomBroadcaster.publish_participants(@room)
+
+      head :no_content
     end
 
     def signal

@@ -3,6 +3,7 @@ import { avatarUrl } from "discourse/lib/avatar-utils";
 import { withPluginApi } from "discourse/lib/plugin-api";
 import { isiPad } from "discourse/lib/utilities";
 import { i18n } from "discourse-i18n";
+import ResenhaParticipantSidebarContextMenu from "discourse/plugins/resenha/discourse/components/resenha-participant-sidebar-context-menu";
 import ResenhaRoomSidebarContextMenu from "discourse/plugins/resenha/discourse/components/resenha-room-sidebar-context-menu";
 
 const LINK_NAME_PREFIX = "resenha-room-";
@@ -54,7 +55,10 @@ export default {
               event.stopPropagation();
               event.preventDefault();
 
-              this.menuService.show(event.target, {
+              const anchor =
+                event.target.closest(".sidebar-section-link") || event.target;
+
+              this.menuService.show(anchor, {
                 identifier: "resenha-room-menu",
                 component: ResenhaRoomSidebarContextMenu,
                 placement: "right",
@@ -152,10 +156,65 @@ export default {
         };
 
         const ParticipantLink = class extends BaseLink {
-          constructor({ room, participant }) {
+          constructor({
+            room,
+            participant,
+            webrtcService,
+            user,
+            menu,
+            canManageRoom,
+          }) {
             super(...arguments);
             this.room = room;
             this.participant = participant;
+            this.resenhaWebrtc = webrtcService;
+            this.currentUser = user;
+            this.menuService = menu;
+            this.canManageRoom = canManageRoom;
+          }
+
+          get hoverType() {
+            if (this.participant.id === this.currentUser?.id) {
+              return null;
+            }
+            return "icon";
+          }
+
+          get hoverValue() {
+            if (this.participant.id === this.currentUser?.id || isiPad()) {
+              return null;
+            }
+            return "ellipsis-vertical";
+          }
+
+          get hoverTitle() {
+            return i18n("resenha.participant.menu_title");
+          }
+
+          get hoverAction() {
+            if (this.participant.id === this.currentUser?.id || isiPad()) {
+              return noop;
+            }
+
+            return (event, onMenuClose) => {
+              event.stopPropagation();
+              event.preventDefault();
+
+              const anchor =
+                event.target.closest(".sidebar-section-link") || event.target;
+
+              this.menuService.show(anchor, {
+                identifier: "resenha-participant-menu",
+                component: ResenhaParticipantSidebarContextMenu,
+                placement: "right",
+                data: {
+                  room: this.room,
+                  participant: this.participant,
+                  canManageRoom: this.canManageRoom,
+                },
+                onClose: onMenuClose,
+              });
+            };
           }
 
           get name() {
@@ -167,6 +226,10 @@ export default {
 
             if (this.participant.is_speaking) {
               classes.push("resenha-sidebar-participant--speaking");
+            }
+
+            if (this.participant.is_muted) {
+              classes.push("resenha-sidebar-participant--muted");
             }
 
             return classes.join(" ");
@@ -223,8 +286,19 @@ export default {
               });
               result.push(roomLink);
 
+              const canManageRoom = room.can_manage;
+
               for (const participant of roomLink.getParticipantsForSummary()) {
-                result.push(new ParticipantLink({ room, participant }));
+                result.push(
+                  new ParticipantLink({
+                    room,
+                    participant,
+                    webrtcService: resenhaWebrtc,
+                    user: currentUser,
+                    menu: menuService,
+                    canManageRoom,
+                  })
+                );
               }
             }
 

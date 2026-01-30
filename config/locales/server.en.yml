@@ -12,3 +12,5 @@ en:
       not_authorized: "You are not allowed to perform that action for this room."
       room_limit: "You reached the maximum number of rooms you can create."
       missing_payload: "Signal payload is required."
+      cannot_kick_self: "You cannot kick yourself from the room."
+      cannot_kick_creator: "You cannot kick the room creator."

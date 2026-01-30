@@ -190,6 +190,40 @@ export default class ResenhaRoomsService extends Service {
     }
   }
 
+  setParticipantMuted(roomId, userId, muted) {
+    const targetId = Number(userId);
+    if (!targetId) {
+      return;
+    }
+
+    const room = this.#roomsById.get(roomId);
+    if (!room || !Array.isArray(room.active_participants)) {
+      return;
+    }
+
+    let changed = false;
+    room.active_participants = room.active_participants.map((participant) => {
+      const participantId = Number(participant?.id);
+      if (!participantId || participantId !== targetId) {
+        return participant;
+      }
+
+      if (!!participant.is_muted === muted) {
+        return participant;
+      }
+
+      changed = true;
+      return {
+        ...participant,
+        is_muted: muted,
+      };
+    });
+
+    if (changed) {
+      this.rooms = [...this.rooms];
+    }
+  }
+
   #setRoomParticipants(roomId, participants) {
     const room = this.#roomsById.get(roomId);
     if (!room) {
@@ -197,24 +231,29 @@ export default class ResenhaRoomsService extends Service {
     }
 
     const previous = room.active_participants || [];
-    const speakingByUserId = new Map(
+    const stateByUserId = new Map(
       previous
-        .filter(
-          (participant) =>
-            Number(participant?.id) && participant.is_speaking === true
-        )
-        .map((participant) => [Number(participant.id), participant.is_speaking])
+        .filter((participant) => Number(participant?.id))
+        .map((participant) => [
+          Number(participant.id),
+          {
+            is_speaking: participant.is_speaking === true,
+            is_muted: participant.is_muted === true,
+          },
+        ])
     );
 
     room.active_participants = (participants || []).map((participant) => {
       const participantId = Number(participant?.id);
-      if (!participantId || !speakingByUserId.has(participantId)) {
+      const previousState = stateByUserId.get(participantId);
+      if (!participantId || !previousState) {
         return participant;
       }
 
       return {
         ...participant,
-        is_speaking: speakingByUserId.get(participantId),
+        is_speaking: previousState.is_speaking,
+        is_muted: previousState.is_muted,
       };
     });
     this.rooms = [...this.rooms];

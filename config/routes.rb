@@ -7,6 +7,7 @@ Resenha::Engine.routes.draw do
       delete :leave
       get :participants
       post :signal
+      delete :kick
     end
 
     resources :memberships, controller: "room_memberships", only: %i[index create update destroy]

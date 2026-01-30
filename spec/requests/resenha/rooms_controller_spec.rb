@@ -55,6 +55,55 @@ RSpec.describe Resenha::RoomsController do
     end
   end
 
+  describe "#kick" do
+    before { Resenha::ParticipantTracker.add(room.id, other_participant.id) }
+
+    it "allows room manager to kick participants" do
+      sign_in(staff)
+
+      published = []
+      allow(MessageBus).to receive(:publish) { |channel, data, opts|
+        published << [channel, data, opts]
+      }
+
+      delete "/resenha/rooms/#{room.id}/kick.json", params: { user_id: other_participant.id }
+
+      expect(response.status).to eq(204)
+      expect(Resenha::ParticipantTracker.user_ids(room.id)).not_to include(other_participant.id)
+
+      kick_message = published.find { |(_, data)| data[:type] == "kicked" }
+      expect(kick_message).to be_present
+      expect(kick_message[2][:user_ids]).to eq([other_participant.id])
+    end
+
+    it "prevents non-managers from kicking" do
+      low_trust_user = Fabricate(:user, trust_level: TrustLevel[0])
+      sign_in(low_trust_user)
+
+      delete "/resenha/rooms/#{room.id}/kick.json", params: { user_id: other_participant.id }
+
+      expect(response.status).to eq(403)
+    end
+
+    it "prevents kicking oneself" do
+      sign_in(staff)
+
+      delete "/resenha/rooms/#{room.id}/kick.json", params: { user_id: staff.id }
+
+      expect(response.status).to eq(400)
+    end
+
+    it "prevents kicking the room creator" do
+      sign_in(staff)
+      other_room = Fabricate(:resenha_room, creator: user, public: true)
+      Resenha::ParticipantTracker.add(other_room.id, user.id)
+
+      delete "/resenha/rooms/#{other_room.id}/kick.json", params: { user_id: user.id }
+
+      expect(response.status).to eq(400)
+    end
+  end
+
   describe "#signal" do
     it "rejects missing payloads" do
       sign_in(user)
