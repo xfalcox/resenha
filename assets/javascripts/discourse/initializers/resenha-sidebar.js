@@ -1,8 +1,10 @@
 import { htmlSafe } from "@ember/template";
+import noop from "discourse/helpers/noop";
 import { avatarImg } from "discourse/lib/avatar-utils";
 import { withPluginApi } from "discourse/lib/plugin-api";
-import { escapeExpression } from "discourse/lib/utilities";
+import { escapeExpression, isiPad } from "discourse/lib/utilities";
 import { i18n } from "discourse-i18n";
+import ResenhaRoomSidebarContextMenu from "discourse/plugins/resenha/discourse/components/resenha-room-sidebar-context-menu";
 
 const LINK_NAME_PREFIX = "resenha-room-";
 const MAX_INLINE_AVATARS = 11;
@@ -21,14 +23,47 @@ export default {
 
       const roomsService = owner.lookup("service:resenha-rooms");
       const resenhaWebrtc = owner.lookup("service:resenha-webrtc");
+      const menuService = owner.lookup("service:menu");
 
       api.addSidebarSection((BaseSection, BaseLink) => {
         const RoomsLink = class extends BaseLink {
-          constructor({ room, webrtcService, user }) {
+          constructor({ room, webrtcService, user, menu }) {
             super(...arguments);
             this.room = room;
             this.resenhaWebrtc = webrtcService;
             this.currentUser = user;
+            this.menuService = menu;
+          }
+
+          get hoverType() {
+            return "icon";
+          }
+
+          get hoverValue() {
+            return isiPad() ? null : "ellipsis-vertical";
+          }
+
+          get hoverTitle() {
+            return i18n("resenha.room.menu_title");
+          }
+
+          get hoverAction() {
+            if (isiPad()) {
+              return noop;
+            }
+
+            return (event, onMenuClose) => {
+              event.stopPropagation();
+              event.preventDefault();
+
+              this.menuService.show(event.target, {
+                identifier: "resenha-room-menu",
+                component: ResenhaRoomSidebarContextMenu,
+                placement: "right",
+                data: { room: this.room },
+                onClose: onMenuClose,
+              });
+            };
           }
 
           get name() {
@@ -52,8 +87,12 @@ export default {
             return classes.join(" ");
           }
 
-          get href() {
-            return "#";
+          get route() {
+            return "discovery";
+          }
+
+          get currentWhen() {
+            return false;
           }
 
           get title() {
@@ -213,6 +252,7 @@ export default {
                   room,
                   webrtcService: resenhaWebrtc,
                   user: currentUser,
+                  menu: menuService,
                 })
             );
           }

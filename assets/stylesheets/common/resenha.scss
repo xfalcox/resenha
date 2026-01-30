@@ -86,3 +86,282 @@
     opacity: 0;
   }
 }
+
+.resenha-room-sidebar-context-menu {
+  .btn {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+.resenha-room-info-modal {
+  .d-modal__body {
+    padding: 0;
+  }
+
+  &__header {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1.5rem;
+    background: linear-gradient(
+      135deg,
+      var(--tertiary-low) 0%,
+      var(--tertiary-very-low) 100%
+    );
+    border-bottom: 1px solid var(--primary-low);
+  }
+
+  &__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.5rem;
+    height: 3.5rem;
+    background: var(--tertiary);
+    border-radius: 12px;
+    flex-shrink: 0;
+
+    .d-icon {
+      color: var(--secondary);
+      font-size: 1.5rem;
+    }
+  }
+
+  &__header-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__room-name {
+    margin: 0 0 0.25rem;
+    font-size: var(--font-up-3);
+    font-weight: 700;
+    color: var(--primary);
+    line-height: 1.2;
+  }
+
+  &__description {
+    margin: 0;
+    color: var(--primary-high);
+    font-size: var(--font-0);
+    line-height: 1.4;
+  }
+
+  &__stats {
+    display: flex;
+    gap: 0.5rem;
+    padding: 1rem 1.5rem;
+    background: var(--secondary);
+    border-bottom: 1px solid var(--primary-low);
+  }
+
+  &__stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 0.75rem;
+    background: var(--primary-very-low);
+    border-radius: 8px;
+    text-align: center;
+    gap: 0.25rem;
+  }
+
+  &__stat-value {
+    font-size: var(--font-up-2);
+    font-weight: 700;
+    color: var(--primary);
+
+    .d-icon {
+      font-size: 1.25rem;
+      color: var(--primary-medium);
+    }
+  }
+
+  &__stat-label {
+    font-size: var(--font-down-1);
+    color: var(--primary-medium);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 500;
+  }
+
+  &__members {
+    padding: 1.5rem;
+  }
+
+  &__section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid var(--tertiary-low);
+
+    .d-icon {
+      color: var(--tertiary);
+      font-size: 1.1rem;
+    }
+
+    h3 {
+      margin: 0;
+      font-size: var(--font-up-1);
+      font-weight: 600;
+      color: var(--primary);
+    }
+  }
+
+  &__loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 2rem;
+    color: var(--primary-medium);
+  }
+
+  &__member-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+
+  &__member {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: var(--primary-very-low);
+    border-radius: 8px;
+    transition: background 0.15s ease;
+
+    &:hover {
+      background: var(--primary-low);
+    }
+
+    &.--creator {
+      background: linear-gradient(
+        135deg,
+        var(--tertiary-very-low) 0%,
+        var(--primary-very-low) 100%
+      );
+      border: 1px solid var(--tertiary-low);
+
+      &:hover {
+        background: linear-gradient(
+          135deg,
+          var(--tertiary-low) 0%,
+          var(--primary-low) 100%
+        );
+      }
+    }
+  }
+
+  &__member-avatar {
+    flex-shrink: 0;
+
+    img {
+      border-radius: 50%;
+      box-shadow: 0 1px 3px rgb(0, 0, 0, 0.1);
+    }
+  }
+
+  &__member-details {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  &__member-username {
+    font-weight: 600;
+    color: var(--primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__member-role {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: var(--font-down-1);
+    color: var(--primary-medium);
+    text-transform: capitalize;
+
+    &.--creator {
+      color: var(--tertiary);
+      font-weight: 500;
+
+      .d-icon {
+        font-size: 0.75rem;
+        color: var(--tertiary);
+      }
+    }
+
+    &.--moderator {
+      color: var(--success);
+    }
+  }
+
+  &__member-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+  }
+
+  &__role-select {
+    min-width: 110px;
+
+    .select-kit-header {
+      padding: 0.35rem 0.5rem;
+    }
+  }
+
+  &__remove-btn {
+    color: var(--primary-medium);
+    padding: 0.4rem;
+
+    &:hover {
+      color: var(--danger);
+      background: var(--danger-low);
+    }
+
+    .d-icon {
+      font-size: 0.85rem;
+    }
+  }
+
+  &__add-member {
+    padding-top: 1rem;
+    border-top: 1px solid var(--primary-low);
+  }
+
+  &__add-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: stretch;
+  }
+
+  &__user-chooser {
+    flex: 1;
+    min-width: 180px;
+  }
+
+  &__role-chooser {
+    width: 120px;
+    flex-shrink: 0;
+  }
+
+  &__add-btn {
+    flex-shrink: 0;
+    padding: 0.5rem 0.75rem;
+  }
+}

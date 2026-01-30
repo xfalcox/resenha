@@ -11,7 +11,9 @@ module Resenha
                :created_at,
                :updated_at,
                :member_count,
-               :active_participants
+               :active_participants,
+               :creator_id,
+               :can_manage
 
     has_one :membership, serializer: Resenha::RoomMembershipSerializer, embed: :objects
 
@@ -27,6 +29,10 @@ module Resenha
       Resenha::ParticipantTracker
         .list(object.id)
         .map { |user| BasicUserSerializer.new(user, scope: scope, root: false).as_json }
+    end
+
+    def can_manage
+      scope.can_manage_resenha_room?(object)
     end
   end
 end
