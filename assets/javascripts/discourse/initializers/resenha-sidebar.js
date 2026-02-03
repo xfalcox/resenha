@@ -85,12 +85,8 @@ export default {
             return classes.join(" ");
           }
 
-          get route() {
-            return "discovery";
-          }
-
-          get currentWhen() {
-            return false;
+          get href() {
+            return "#";
           }
 
           get title() {
@@ -235,12 +231,8 @@ export default {
             return classes.join(" ");
           }
 
-          get route() {
-            return "discovery";
-          }
-
-          get currentWhen() {
-            return false;
+          get href() {
+            return "#";
           }
 
           get title() {
