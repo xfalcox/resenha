@@ -1,7 +1,6 @@
 import noop from "discourse/helpers/noop";
 import { avatarUrl } from "discourse/lib/avatar-utils";
 import { withPluginApi } from "discourse/lib/plugin-api";
-import { isiPad } from "discourse/lib/utilities";
 import { i18n } from "discourse-i18n";
 import ResenhaParticipantSidebarContextMenu from "discourse/plugins/resenha/discourse/components/resenha-participant-sidebar-context-menu";
 import ResenhaRoomSidebarContextMenu from "discourse/plugins/resenha/discourse/components/resenha-room-sidebar-context-menu";
@@ -23,6 +22,7 @@ export default {
       const roomsService = owner.lookup("service:resenha-rooms");
       const resenhaWebrtc = owner.lookup("service:resenha-webrtc");
       const menuService = owner.lookup("service:menu");
+      const capabilities = owner.lookup("service:capabilities");
 
       api.addSidebarSection((BaseSection, BaseLink) => {
         const RoomsLink = class extends BaseLink {
@@ -39,7 +39,7 @@ export default {
           }
 
           get hoverValue() {
-            return isiPad() ? null : "ellipsis-vertical";
+            return capabilities.isIpadOS ? null : "ellipsis-vertical";
           }
 
           get hoverTitle() {
@@ -47,7 +47,7 @@ export default {
           }
 
           get hoverAction() {
-            if (isiPad()) {
+            if (capabilities.isIpadOS) {
               return noop;
             }
 
@@ -177,7 +177,10 @@ export default {
           }
 
           get hoverValue() {
-            if (this.participant.id === this.currentUser?.id || isiPad()) {
+            if (
+              this.participant.id === this.currentUser?.id ||
+              capabilities.isIpadOS
+            ) {
               return null;
             }
             return "ellipsis-vertical";
@@ -188,7 +191,10 @@ export default {
           }
 
           get hoverAction() {
-            if (this.participant.id === this.currentUser?.id || isiPad()) {
+            if (
+              this.participant.id === this.currentUser?.id ||
+              capabilities.isIpadOS
+            ) {
               return noop;
             }
 
