@@ -9,17 +9,25 @@ import { i18n } from "discourse-i18n";
 export default class ResenhaRoomForm extends Component {
   @tracked isSaving = false;
 
+  get room() {
+    return this.args.room || this.args.model?.room;
+  }
+
+  get onSave() {
+    return this.args.onSave || this.args.model?.onSave;
+  }
+
   get formData() {
     return {
-      name: this.args.room?.name || "",
-      description: this.args.room?.description || "",
-      public: this.args.room?.public ?? false,
-      max_participants: this.args.room?.max_participants || null,
+      name: this.room?.name || "",
+      description: this.room?.description || "",
+      public: this.room?.public ?? false,
+      max_participants: this.room?.max_participants || null,
     };
   }
 
   get submitLabel() {
-    return this.args.room?.id ? "resenha.admin.update" : "resenha.admin.create";
+    return this.room?.id ? "resenha.admin.update" : "resenha.admin.create";
   }
 
   @action
@@ -27,10 +35,10 @@ export default class ResenhaRoomForm extends Component {
     this.isSaving = true;
 
     try {
-      const room = this.args.room;
+      const room = this.room;
       room.setProperties(data);
       await room.save();
-      this.args.onSave?.(room);
+      this.onSave?.(room);
     } catch (e) {
       popupAjaxError(e);
     } finally {
@@ -40,11 +48,13 @@ export default class ResenhaRoomForm extends Component {
 
   <template>
     <div class="admin-detail resenha-room-form">
-      <BackButton
-        @label="resenha.admin.back"
-        @route="adminPlugins.show.resenha-rooms.index"
-        class="resenha-admin-back"
-      />
+      {{#unless @model}}
+        <BackButton
+          @label="resenha.admin.back"
+          @route="adminPlugins.show.resenha-rooms.index"
+          class="resenha-admin-back"
+        />
+      {{/unless}}
 
       <Form
         @data={{this.formData}}

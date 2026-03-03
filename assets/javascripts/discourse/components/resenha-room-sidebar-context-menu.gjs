@@ -19,6 +19,10 @@ export default class ResenhaRoomSidebarContextMenu extends Component {
     return this.resenhaWebrtc.connectionStateFor(this.room.id) === "connected";
   }
 
+  get canManage() {
+    return this.room.can_manage;
+  }
+
   get editRoomUrl() {
     return getURL(`/admin/plugins/resenha/resenha-rooms/${this.room.id}`);
   }
@@ -46,7 +50,7 @@ export default class ResenhaRoomSidebarContextMenu extends Component {
           class="resenha-room-sidebar-context-menu__room-info"
         />
       </dropdown.item>
-      {{#if this.currentUser.admin}}
+      {{#if this.canManage}}
         <dropdown.item>
           <DButton
             @href={{this.editRoomUrl}}

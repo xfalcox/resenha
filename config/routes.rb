@@ -8,6 +8,7 @@ Resenha::Engine.routes.draw do
       delete :leave
       get :participants
       post :signal
+      post :toggle_mute
       delete :kick
     end
 

@@ -3,7 +3,18 @@
 module Resenha
   class RoomsController < ApplicationController
     before_action :load_room,
-                  only: %i[show update destroy join leave participants signal kick heartbeat]
+                  only: %i[
+                    show
+                    update
+                    destroy
+                    join
+                    leave
+                    participants
+                    signal
+                    kick
+                    heartbeat
+                    toggle_mute
+                  ]
 
     def index
       Resenha::DefaultRoomSeeder.ensure!
@@ -78,6 +89,18 @@ module Resenha
     def heartbeat
       guardian.ensure_can_join_resenha_room!(@room)
       Resenha::ParticipantTracker.add(@room.id, current_user.id)
+      head :no_content
+    end
+
+    def toggle_mute
+      guardian.ensure_can_join_resenha_room!(@room)
+
+      metadata = Resenha::ParticipantTracker.get_metadata(@room.id, current_user.id)
+      metadata[:is_muted] = !!params[:muted]
+
+      Resenha::ParticipantTracker.update_metadata(@room.id, current_user.id, metadata)
+      Resenha::RoomBroadcaster.publish_participants(@room)
+
       head :no_content
     end
 

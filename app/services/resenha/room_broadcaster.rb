@@ -16,13 +16,19 @@ module Resenha
 
     def publish_participants
       guardian = Guardian.new(nil)
+      metadata = Resenha::ParticipantTracker.get_all_metadata(room.id)
+
       payload = {
         type: "participants",
         room_id: room.id,
         participants:
           Resenha::ParticipantTracker
             .list(room.id)
-            .map { |user| BasicUserSerializer.new(user, scope: guardian, root: false).as_json },
+            .map do |user|
+              json = BasicUserSerializer.new(user, scope: guardian, root: false).as_json
+              json.merge!(metadata[user.id.to_s] || {})
+              json
+            end,
       }
 
       MessageBus.publish(Resenha.room_channel(room.id), payload, **room.message_bus_targets)

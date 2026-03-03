@@ -19,6 +19,8 @@ en:
         connection_error: "We couldn't start a WebRTC session. Please ensure your browser has microphone permissions."
         noise_suppression_on: "Disable noise suppression"
         noise_suppression_off: "Enable noise suppression"
+        deafen_on: "Deafen"
+        deafen_off: "Undeafen"
       participant:
         menu_title: "Participant options"
         volume: "Volume"

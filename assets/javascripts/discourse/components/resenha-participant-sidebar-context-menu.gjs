@@ -74,6 +74,26 @@ export default class ResenhaParticipantSidebarContextMenu extends Component {
       : "resenha.room.noise_suppression_off";
   }
 
+  get micIcon() {
+    return this.resenhaWebrtc.audioEnabled ? "microphone" : "microphone-slash";
+  }
+
+  get micLabel() {
+    return this.resenhaWebrtc.audioEnabled
+      ? "resenha.room.mic_on"
+      : "resenha.room.mic_off";
+  }
+
+  get deafenIcon() {
+    return this.resenhaWebrtc.deafened ? "volume-xmark" : "volume-high";
+  }
+
+  get deafenLabel() {
+    return this.resenhaWebrtc.deafened
+      ? "resenha.room.deafen_off"
+      : "resenha.room.deafen_on";
+  }
+
   @action
   onVolumeChange(event) {
     this.volume = parseInt(event.target.value, 10);
@@ -106,6 +126,16 @@ export default class ResenhaParticipantSidebarContextMenu extends Component {
   }
 
   @action
+  async toggleMic() {
+    await this.resenhaWebrtc.toggleMute();
+  }
+
+  @action
+  toggleDeafen() {
+    this.resenhaWebrtc.toggleDeafen();
+  }
+
+  @action
   async toggleNoiseSuppression() {
     await this.resenhaWebrtc.toggleNoiseSuppression();
   }
@@ -116,6 +146,24 @@ export default class ResenhaParticipantSidebarContextMenu extends Component {
       as |dropdown|
     >
       {{#if this.isCurrentUser}}
+        <dropdown.item>
+          <DButton
+            @action={{this.toggleMic}}
+            @icon={{this.micIcon}}
+            @label={{this.micLabel}}
+            @title={{this.micLabel}}
+            class="resenha-participant-sidebar-context-menu__mic-toggle"
+          />
+        </dropdown.item>
+        <dropdown.item>
+          <DButton
+            @action={{this.toggleDeafen}}
+            @icon={{this.deafenIcon}}
+            @label={{this.deafenLabel}}
+            @title={{this.deafenLabel}}
+            class="resenha-participant-sidebar-context-menu__deafen-toggle"
+          />
+        </dropdown.item>
         {{#if this.showNoiseSuppressionToggle}}
           <dropdown.item>
             <DButton

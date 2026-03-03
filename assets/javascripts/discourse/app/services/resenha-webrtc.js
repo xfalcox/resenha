@@ -10,6 +10,7 @@ export default class ResenhaWebrtcService extends Service {
 
   @tracked localStream;
   @tracked audioEnabled = true;
+  @tracked deafened = false;
   @tracked noiseSuppressionEnabled = false;
   @tracked remoteStreamsRevision = 0;
   @tracked connectionRevision = 0;
@@ -154,6 +155,7 @@ export default class ResenhaWebrtcService extends Service {
       return;
     }
 
+    this.audioEnabled = true;
     this.#connectingRoomIds.add(room.id);
     this.#bumpConnectionRevision();
 
@@ -331,6 +333,15 @@ export default class ResenhaWebrtcService extends Service {
     this.#applyAudioSettings(roomId, userId);
   }
 
+  @action
+  toggleDeafen() {
+    this.deafened = !this.deafened;
+    this.#audioElements.forEach((element, key) => {
+      const [roomId, userId] = key.split(":");
+      this.#applyAudioSettings(roomId, Number(userId));
+    });
+  }
+
   getParticipantVolume(roomId, userId) {
     const key = this.remotePeerKey(roomId, userId);
     return this.#participantVolumes.get(key) ?? 1;
@@ -358,7 +369,7 @@ export default class ResenhaWebrtcService extends Service {
       return;
     }
 
-    const muted = this.#participantMuted.get(key) ?? false;
+    const muted = this.deafened || (this.#participantMuted.get(key) ?? false);
     const volume = this.#participantVolumes.get(key) ?? 1;
 
     element.muted = muted;
@@ -877,7 +888,10 @@ export default class ResenhaWebrtcService extends Service {
       return;
     }
 
-    this.resenhaRooms?.addParticipant(roomId, participant);
+    this.resenhaRooms?.addParticipant(roomId, {
+      ...participant,
+      is_muted: !this.audioEnabled,
+    });
   }
 
   #removeLocalParticipant(roomId) {
@@ -1709,6 +1723,33 @@ export default class ResenhaWebrtcService extends Service {
     }
 
     this.noiseSuppressionEnabled = false;
+  }
+
+  async toggleMute() {
+    const newMutedState = this.audioEnabled; // If enabled, we're about to mute
+    this.audioEnabled = !newMutedState;
+
+    this.localStream?.getAudioTracks()?.forEach((track) => {
+      track.enabled = this.audioEnabled;
+    });
+
+    for (const roomId of this.#activeRoomIds) {
+      this.resenhaRooms?.setParticipantMuted(
+        roomId,
+        this.currentUser?.id,
+        newMutedState
+      );
+
+      try {
+        await ajax(`/resenha/rooms/${roomId}/toggle_mute`, {
+          type: "POST",
+          data: { muted: newMutedState },
+        });
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.warn("[resenha] failed to toggle mute on server", error);
+      }
+    }
   }
 
   async toggleNoiseSuppression() {

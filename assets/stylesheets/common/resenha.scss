@@ -222,11 +222,34 @@
   }
 
   &__room-name {
-    margin: 0 0 0.25rem;
+    margin: 0;
     font-size: var(--font-up-3);
     font-weight: 700;
     color: var(--primary);
     line-height: 1.2;
+  }
+
+  &__title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+  }
+
+  &__edit-name {
+    width: 100%;
+    margin-bottom: 0.5rem;
+  }
+
+  &__edit-description {
+    width: 100%;
+    min-height: 80px;
+    margin-bottom: 0.5rem;
+  }
+
+  &__edit-actions {
+    display: flex;
+    gap: 0.5rem;
   }
 
   &__description {

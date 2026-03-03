@@ -4,6 +4,7 @@ import { withPluginApi } from "discourse/lib/plugin-api";
 import { i18n } from "discourse-i18n";
 import ResenhaParticipantSidebarContextMenu from "discourse/plugins/resenha/discourse/components/resenha-participant-sidebar-context-menu";
 import ResenhaRoomSidebarContextMenu from "discourse/plugins/resenha/discourse/components/resenha-room-sidebar-context-menu";
+import ResenhaRoomForm from "discourse/plugins/resenha/admin/components/resenha-room-form";
 
 const LINK_NAME_PREFIX = "resenha-room-";
 let sidebarClickHandler;
@@ -287,6 +288,35 @@ export default {
           name = "resenha-rooms";
           text = i18n("resenha.sidebar.title");
           title = i18n("resenha.sidebar.title");
+
+          get headerActions() {
+            if (
+              !currentUser.staff &&
+              currentUser.trust_level < siteSettings.resenha_allow_trust_level
+            ) {
+              return [];
+            }
+
+            return [
+              {
+                id: "create-room",
+                icon: "plus",
+                title: i18n("resenha.sidebar.create"),
+                action: () => {
+                  const modal = owner.lookup("service:modal");
+                  modal.show(ResenhaRoomForm, {
+                    model: {
+                      room: owner.lookup("service:store").createRecord("resenha-room"),
+                      onSave: (room) => {
+                        roomsService.handleDirectoryEvent({ type: "created", room });
+                        modal.close();
+                      },
+                    },
+                  });
+                },
+              },
+            ];
+          }
 
           constructor() {
             super(...arguments);

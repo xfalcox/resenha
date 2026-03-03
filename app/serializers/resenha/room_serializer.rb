@@ -28,9 +28,15 @@ module Resenha
     end
 
     def active_participants
+      metadata = Resenha::ParticipantTracker.get_all_metadata(object.id)
+
       Resenha::ParticipantTracker
         .list(object.id)
-        .map { |user| BasicUserSerializer.new(user, scope: scope, root: false).as_json }
+        .map do |user|
+          json = BasicUserSerializer.new(user, scope: scope, root: false).as_json
+          json.merge!(metadata[user.id.to_s] || {})
+          json
+        end
     end
 
     def can_manage

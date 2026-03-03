@@ -1,10 +1,12 @@
 import Component from "@glimmer/component";
 import { tracked } from "@glimmer/tracking";
 import { fn, hash } from "@ember/helper";
+import { on } from "@ember/modifier";
 import { action } from "@ember/object";
 import { htmlSafe } from "@ember/template";
 import DButton from "discourse/components/d-button";
 import DModal from "discourse/components/d-modal";
+import TextField from "discourse/components/text-field";
 import avatar from "discourse/helpers/avatar";
 import icon from "discourse/helpers/d-icon";
 import { ajax } from "discourse/lib/ajax";
@@ -20,6 +22,11 @@ export default class ResenhaRoomInfoModal extends Component {
   @tracked selectedUsernames = [];
   @tracked selectedRole = "participant";
   @tracked addingMember = false;
+  @tracked isEditing = false;
+  @tracked editName = "";
+  @tracked editDescription = "";
+  @tracked editPublic = false;
+  @tracked editMaxParticipants = null;
 
   constructor() {
     super(...arguments);
@@ -30,6 +37,45 @@ export default class ResenhaRoomInfoModal extends Component {
 
   get room() {
     return this.args.model.room;
+  }
+
+  @action
+  toggleEditing() {
+    if (this.isEditing) {
+      this.isEditing = false;
+    } else {
+      this.editName = this.room.name;
+      this.editDescription = this.room.description;
+      this.editPublic = this.room.public;
+      this.editMaxParticipants = this.room.max_participants;
+      this.isEditing = true;
+    }
+  }
+
+  @action
+  updateEditPublic(event) {
+    this.editPublic = event.target.checked;
+  }
+
+  @action
+  async saveRoom() {
+    try {
+      const result = await ajax(`/resenha/rooms/${this.room.id}`, {
+        type: "PUT",
+        data: {
+          room: {
+            name: this.editName,
+            description: this.editDescription,
+            public: this.editPublic,
+            max_participants: this.editMaxParticipants,
+          },
+        },
+      });
+      this.args.model.room = result.room;
+      this.isEditing = false;
+    } catch (error) {
+      popupAjaxError(error);
+    }
   }
 
   get showMembershipManagement() {
@@ -131,13 +177,45 @@ export default class ResenhaRoomInfoModal extends Component {
             {{icon "microphone-lines"}}
           </div>
           <div class="resenha-room-info-modal__header-content">
-            <h2
-              class="resenha-room-info-modal__room-name"
-            >{{this.room.name}}</h2>
-            {{#if this.room.cooked_description}}
-              <div
-                class="resenha-room-info-modal__description cooked"
-              >{{htmlSafe this.room.cooked_description}}</div>
+            {{#if this.isEditing}}
+              <TextField
+                @value={{this.editName}}
+                class="resenha-room-info-modal__edit-name"
+              />
+              <textarea
+                class="resenha-room-info-modal__edit-description"
+                {{on "input" (action (mut this.editDescription) value="target.value")}}
+              >{{this.editDescription}}</textarea>
+              <div class="resenha-room-info-modal__edit-actions">
+                <DButton
+                  @action={{this.saveRoom}}
+                  @label="resenha.admin.update"
+                  class="btn-primary"
+                />
+                <DButton
+                  @action={{this.toggleEditing}}
+                  @label="cancel"
+                  class="btn-flat"
+                />
+              </div>
+            {{else}}
+              <div class="resenha-room-info-modal__title-row">
+                <h2
+                  class="resenha-room-info-modal__room-name"
+                >{{this.room.name}}</h2>
+                {{#if this.room.can_manage}}
+                  <DButton
+                    @action={{this.toggleEditing}}
+                    @icon="pencil"
+                    class="btn-flat btn-small"
+                  />
+                {{/if}}
+              </div>
+              {{#if this.room.cooked_description}}
+                <div
+                  class="resenha-room-info-modal__description cooked"
+                >{{htmlSafe this.room.cooked_description}}</div>
+              {{/if}}
             {{/if}}
           </div>
         </div>
@@ -145,18 +223,30 @@ export default class ResenhaRoomInfoModal extends Component {
         <div class="resenha-room-info-modal__stats">
           <div class="resenha-room-info-modal__stat">
             <span class="resenha-room-info-modal__stat-value">
-              {{#if this.room.public}}
-                {{icon "globe"}}
+              {{#if this.isEditing}}
+                <input
+                  type="checkbox"
+                  checked={{this.editPublic}}
+                  {{on "change" this.updateEditPublic}}
+                />
               {{else}}
-                {{icon "lock"}}
+                {{#if this.room.public}}
+                  {{icon "globe"}}
+                {{else}}
+                  {{icon "lock"}}
+                {{/if}}
               {{/if}}
             </span>
             <span class="resenha-room-info-modal__stat-label">
-              {{if
-                this.room.public
-                (i18n "resenha.room_info.public")
-                (i18n "resenha.room_info.private")
-              }}
+              {{#if this.isEditing}}
+                {{i18n "resenha.admin.room.public"}}
+              {{else}}
+                {{if
+                  this.room.public
+                  (i18n "resenha.room_info.public")
+                  (i18n "resenha.room_info.private")
+                }}
+              {{/if}}
             </span>
           </div>
 
@@ -169,16 +259,22 @@ export default class ResenhaRoomInfoModal extends Component {
               }}</span>
           </div>
 
-          {{#if this.room.max_participants}}
-            <div class="resenha-room-info-modal__stat">
-              <span
-                class="resenha-room-info-modal__stat-value"
-              >{{this.room.max_participants}}</span>
-              <span class="resenha-room-info-modal__stat-label">{{i18n
-                  "resenha.room_info.max_participants"
-                }}</span>
-            </div>
-          {{/if}}
+          <div class="resenha-room-info-modal__stat">
+            <span class="resenha-room-info-modal__stat-value">
+              {{#if this.isEditing}}
+                <TextField
+                  @type="number"
+                  @value={{this.editMaxParticipants}}
+                  class="resenha-room-info-modal__edit-max-participants"
+                />
+              {{else}}
+                {{this.room.max_participants}}
+              {{/if}}
+            </span>
+            <span class="resenha-room-info-modal__stat-label">{{i18n
+                "resenha.room_info.max_participants"
+              }}</span>
+          </div>
         </div>
 
         {{#if this.showMembershipManagement}}

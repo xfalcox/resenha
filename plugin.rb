@@ -13,6 +13,8 @@ register_svg_icon "phone"
 register_svg_icon "waveform"
 register_svg_icon "ear-listen"
 register_svg_icon "volume-high"
+register_svg_icon "microphone"
+register_svg_icon "microphone-slash"
 register_asset "stylesheets/common/resenha.scss"
 register_asset "stylesheets/common/resenha-admin.scss", :admin
 
