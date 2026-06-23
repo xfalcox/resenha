@@ -1,6 +1,18 @@
-export function playConnectedSound() {
+let sharedCtx = null;
+
+async function getAudioContext() {
+  if (!sharedCtx || sharedCtx.state === "closed") {
+    sharedCtx = new AudioContext();
+  }
+  if (sharedCtx.state === "suspended") {
+    await sharedCtx.resume();
+  }
+  return sharedCtx;
+}
+
+export async function playConnectedSound() {
   try {
-    const ctx = new AudioContext();
+    const ctx = await getAudioContext();
     const now = ctx.currentTime;
 
     const osc1 = ctx.createOscillator();
@@ -21,16 +33,14 @@ export function playConnectedSound() {
     osc2.connect(gain2).connect(ctx.destination);
     osc2.start(now + 0.1);
     osc2.stop(now + 0.25);
-
-    osc2.onended = () => ctx.close();
   } catch {
     // audio not available
   }
 }
 
-export function playDisconnectedSound() {
+export async function playDisconnectedSound() {
   try {
-    const ctx = new AudioContext();
+    const ctx = await getAudioContext();
     const now = ctx.currentTime;
 
     const osc1 = ctx.createOscillator();
@@ -51,16 +61,14 @@ export function playDisconnectedSound() {
     osc2.connect(gain2).connect(ctx.destination);
     osc2.start(now + 0.1);
     osc2.stop(now + 0.25);
-
-    osc2.onended = () => ctx.close();
   } catch {
     // audio not available
   }
 }
 
-export function playUserJoinedSound() {
+export async function playUserJoinedSound() {
   try {
-    const ctx = new AudioContext();
+    const ctx = await getAudioContext();
     const now = ctx.currentTime;
 
     const osc = ctx.createOscillator();
@@ -71,16 +79,14 @@ export function playUserJoinedSound() {
     osc.connect(gain).connect(ctx.destination);
     osc.start(now);
     osc.stop(now + 0.1);
-
-    osc.onended = () => ctx.close();
   } catch {
     // audio not available
   }
 }
 
-export function playUserLeftSound() {
+export async function playUserLeftSound() {
   try {
-    const ctx = new AudioContext();
+    const ctx = await getAudioContext();
     const now = ctx.currentTime;
 
     const osc = ctx.createOscillator();
@@ -91,16 +97,14 @@ export function playUserLeftSound() {
     osc.connect(gain).connect(ctx.destination);
     osc.start(now);
     osc.stop(now + 0.1);
-
-    osc.onended = () => ctx.close();
   } catch {
     // audio not available
   }
 }
 
-export function playMuteSound() {
+export async function playMuteSound() {
   try {
-    const ctx = new AudioContext();
+    const ctx = await getAudioContext();
     const now = ctx.currentTime;
 
     const osc = ctx.createOscillator();
@@ -111,16 +115,14 @@ export function playMuteSound() {
     osc.connect(gain).connect(ctx.destination);
     osc.start(now);
     osc.stop(now + 0.08);
-
-    osc.onended = () => ctx.close();
   } catch {
     // audio not available
   }
 }
 
-export function playUnmuteSound() {
+export async function playUnmuteSound() {
   try {
-    const ctx = new AudioContext();
+    const ctx = await getAudioContext();
     const now = ctx.currentTime;
 
     const osc = ctx.createOscillator();
@@ -131,16 +133,14 @@ export function playUnmuteSound() {
     osc.connect(gain).connect(ctx.destination);
     osc.start(now);
     osc.stop(now + 0.08);
-
-    osc.onended = () => ctx.close();
   } catch {
     // audio not available
   }
 }
 
-export function playDeafenSound() {
+export async function playDeafenSound() {
   try {
-    const ctx = new AudioContext();
+    const ctx = await getAudioContext();
     const now = ctx.currentTime;
 
     const osc1 = ctx.createOscillator();
@@ -161,16 +161,14 @@ export function playDeafenSound() {
     osc2.connect(gain2).connect(ctx.destination);
     osc2.start(now + 0.07);
     osc2.stop(now + 0.14);
-
-    osc2.onended = () => ctx.close();
   } catch {
     // audio not available
   }
 }
 
-export function playUndeafenSound() {
+export async function playUndeafenSound() {
   try {
-    const ctx = new AudioContext();
+    const ctx = await getAudioContext();
     const now = ctx.currentTime;
 
     const osc1 = ctx.createOscillator();
@@ -191,8 +189,6 @@ export function playUndeafenSound() {
     osc2.connect(gain2).connect(ctx.destination);
     osc2.start(now + 0.07);
     osc2.stop(now + 0.14);
-
-    osc2.onended = () => ctx.close();
   } catch {
     // audio not available
   }
