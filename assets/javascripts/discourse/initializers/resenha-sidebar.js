@@ -1,4 +1,4 @@
-import { next } from "@ember/runloop";
+import { later, next } from "@ember/runloop";
 import noop from "discourse/helpers/noop";
 import { avatarUrl } from "discourse/lib/avatar-utils";
 import { withPluginApi } from "discourse/lib/plugin-api";
@@ -589,14 +589,16 @@ export default {
 
       // Mirror the section into the chat panel so rooms stay visible in the
       // full-screen chat separate sidebar. The chat panel is registered by the
-      // chat plugin's own initializer, which may run after this one, so retry on
-      // the next runloop if it isn't there yet.
+      // chat plugin's own initializer, whose relative order isn't guaranteed,
+      // so poll until the panel shows up. The panel may also have rendered by
+      // then, and pushes into its sections array aren't tracked, so reassign
+      // the array to make a late-registered section render.
       const registerChatRoomsSection = () => {
-        const chatPanelExists = (sidebarState.panels || []).some(
+        const foundChatPanel = (sidebarState.panels || []).find(
           (panel) => panel.key === CHAT_PANEL
         );
 
-        if (!chatPanelExists) {
+        if (!foundChatPanel) {
           return false;
         }
 
@@ -607,11 +609,21 @@ export default {
           }),
           CHAT_PANEL
         );
+        foundChatPanel.sections = [...foundChatPanel.sections];
         return true;
       };
 
       if (siteSettings.chat_enabled && !registerChatRoomsSection()) {
-        next(registerChatRoomsSection);
+        // The panel never appears for users who can't chat; give up quietly
+        // after a few seconds.
+        let attempts = 0;
+        const retryRegistration = () => {
+          if (registerChatRoomsSection() || ++attempts >= 50) {
+            return;
+          }
+          later(retryRegistration, 100);
+        };
+        next(retryRegistration);
       }
 
       if (sidebarClickHandler) {
